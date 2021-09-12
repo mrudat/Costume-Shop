@@ -1,8 +1,8 @@
 {
   "Nickname": "CostumeShop",
   "Visibility": "Visible",
-  "OneLineDescription": "",
-  "LongDescription": "",
+  "OneLineDescription": "Creates costume armor",
+  "LongDescription": "Creates unenchanted (replica) copies of enchanted armor with no unenchanted version (mostly unique items).\r\nCreates unarmored (costume) copies of armor.\r\nAdds the new armor to the appropriate leveled lists to appear as loot and at vendors.",
   "PreferredAutoVersioning": "Default",
   "RequiredMods": []
 }

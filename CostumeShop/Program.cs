@@ -203,7 +203,8 @@ namespace CostumeShop
 
                 var keywords = newArmor.Keywords ??= new();
 
-                for (int i = keywords.Count - 1; i >= 0; i--) {
+                for (int i = keywords.Count - 1; i >= 0; i--)
+                {
                     var keyword = keywords[i];
                     if (ArmorKeywordsToClothesKeywords.TryGetValue(keyword, out var newKeyword))
                         keywords[i] = newKeyword;
@@ -243,6 +244,7 @@ namespace CostumeShop
 
                 AddToLeveledLists(newArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
             }
+        }
 
         private IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
             state.LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)

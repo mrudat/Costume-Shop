@@ -154,8 +154,8 @@ namespace CostumeShop
                 newArmorLinks.Add(newArmor.AsLink());
                 templateARMOs.Add(newArmor);
 
-                newArmor.DeepCopyIn(armor, out var foo, ArmorToTemplateCopyMask);
-                if (foo.IsInError() && foo.Overall is Exception e) throw e;
+                newArmor.DeepCopyIn(armor, out var copyError, ArmorToTemplateCopyMask);
+                if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
 
                 if (newArmor.Name is not null)
                     newArmor.Name.String += " (Replica)";
@@ -187,8 +187,8 @@ namespace CostumeShop
 
                 newCostumeLinks.Add(newArmor.AsLink());
 
-                newArmor.DeepCopyIn(armor, out var foo, ArmorToClothesCopyMask);
-                if (foo.IsInError() && foo.Overall is Exception e) throw e;
+                newArmor.DeepCopyIn(armor, out var copyError, ArmorToClothesCopyMask);
+                if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
 
                 newArmor.BodyTemplate!.ArmorType = ArmorType.Clothing;
 

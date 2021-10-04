@@ -168,7 +168,6 @@ namespace CostumeShop
                         if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
                             keywords.RemoveAt(i);
 
-                // I suspect that there is no need to reduce price as the final price factors in the enchantment.
                 keywords.Add(replicaKeyword.Value);
 
                 foreach (var enchantedArmor in enchantedArmorWithNoTemplate)

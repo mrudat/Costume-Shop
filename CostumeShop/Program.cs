@@ -121,12 +121,18 @@ namespace CostumeShop
             HashSet<IFormLinkGetter<IArmorAddonGetter>> armatures = new();
 
             Console.WriteLine("Marking template armors as playable...");
+            List<IFormLink<IArmorGetter>> newArmorLinks = new();
+            List<IFormLink<IArmorGetter>> newCostumeLinks = new();
+
             foreach (var armor in templateARMOs)
             {
                 if (armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable))
                 {
                     state.PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
-                    // TODO add to LLSTs?
+                    if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
+                        newCostumeLinks.Add(armor.AsLink());
+                    else
+                        newArmorLinks.Add(armor.AsLink());
                 }
 
                 armatures.Add(armor.Armature[0]);
@@ -134,7 +140,6 @@ namespace CostumeShop
 
             Console.WriteLine("Creating missing template (unenchaned) armor...");
 
-            List<IFormLink<Armor>> newArmorLinks = new();
 
             foreach (var item in from armor in enchantedARMOsWithNoTemplate
                                  where !armatures.Contains(armor.Armature[0])
@@ -170,8 +175,6 @@ namespace CostumeShop
             }
 
             Console.WriteLine($"Created {newArmorLinks.Count} armor templates.");
-
-            List<IFormLink<Armor>> newCostumeLinks = new();
 
             Console.WriteLine("Creating costume (unarmored) variants of template armor...");
             foreach (var armor in templateARMOs)

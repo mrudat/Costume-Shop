@@ -3,6 +3,7 @@ using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
+using Noggog;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -144,8 +145,8 @@ namespace CostumeShop
 
             Console.WriteLine("Creating missing template (unenchanted) armor...");
             foreach (var enchantedArmorWithNoTemplate in from armor in enchantedARMOsWithNoTemplate
-                                 where !armatures.Contains(armor.Armature[0])
-                                 group armor by armor.Armature[0])
+                                                         where !armatures.Contains(armor.Armature[0])
+                                                         group armor by armor.Armature[0])
             {
                 var armor = enchantedArmorWithNoTemplate.OrderBy(i => i.Armature.Count).First();
 
@@ -165,9 +166,9 @@ namespace CostumeShop
 
                 var keywords = newArmor.Keywords ??= new();
 
-                    for (int i = keywords.Count - 1; i >= 0; i--)
-                        if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
-                            keywords.RemoveAt(i);
+                for (int i = keywords.Count - 1; i >= 0; i--)
+                    if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
+                        keywords.RemoveAt(i);
 
                 keywords.Add(replicaKeyword.Value);
 
@@ -218,7 +219,7 @@ namespace CostumeShop
                     keywords.Remove(Update.Keyword.Survival_ArmorCold);
                 else
                     if (!keywords.Contains(Update.Keyword.Survival_ArmorWarm))
-                        keywords.Add(Update.Keyword.Survival_ArmorWarm);
+                    keywords.Add(Update.Keyword.Survival_ArmorWarm);
 
                 // Add rich keyword; cosplay is an expensive hobby.
                 keywords.Add(Skyrim.Keyword.ClothingRich);

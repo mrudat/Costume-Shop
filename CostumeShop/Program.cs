@@ -249,7 +249,7 @@ namespace CostumeShop
                 : state.PatchMod.Keywords.AddNew(EditorID)
             ).AsLink();
 
-        private void AddToLeveledLists(List<IFormLink<Armor>> newArmorLinkList, string LeveledListBaseEditorID, IList<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
+        private void AddToLeveledLists(List<IFormLink<IArmorGetter>> newArmorLinkList, string LeveledListBaseEditorID, IList<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
         {
             if (newArmorLinkList.Count == 0)
                 return;

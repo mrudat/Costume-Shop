@@ -165,6 +165,8 @@ namespace CostumeShop
                             keywords.RemoveAt(i);
 
                 // I suspect that there is no need to reduce price as the final price factors in the enchantment.
+                foreach (var enchantedArmor in enchantedArmorWithNoTemplate)
+                    state.PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(newArmor);
             }
 
             Console.WriteLine($"Created {newArmorLinks.Count} armor templates.");

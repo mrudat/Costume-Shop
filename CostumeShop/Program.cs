@@ -94,8 +94,9 @@ namespace CostumeShop
                 .PriorityOrder
                 .Armor()
                 .WinningOverrides()
-                .Where(i => i.Armature.Count > 0)
+                .Where(i => i.BodyTemplate is not null)
                 .Where(i => i.Race.FormKey == Skyrim.Race.DefaultRace.FormKey)
+                .Where(i => i.Armature.Count > 0)
                 .ToDictionary(x => x.FormKey);
 
             var replicaKeyword = new Lazy<IFormLinkGetter<IKeywordGetter>>(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));

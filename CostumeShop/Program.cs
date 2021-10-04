@@ -98,6 +98,9 @@ namespace CostumeShop
                 .Where(i => i.Race.FormKey == Skyrim.Race.DefaultRace.FormKey)
                 .ToDictionary(x => x.FormKey);
 
+            var replicaKeyword = new Lazy<IFormLinkGetter<IKeywordGetter>>(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));
+            var costumeKeyword = new Lazy<IFormLinkGetter<IKeywordGetter>>(() => FindOrMakeKeyword("CostumeShop_CostumeKeyword"));
+
             var templateARMOLinks = new HashSet<IFormLinkGetter<IArmorGetter>>();
             var unenchantedARMOs = new HashSet<IArmorGetter>();
             var enchantedARMOsWithNoTemplate = new HashSet<IArmorGetter>();
@@ -159,14 +162,15 @@ namespace CostumeShop
 
                 newArmor.Description?.Clear();
 
-                var keywords = newArmor.Keywords;
+                var keywords = newArmor.Keywords ??= new();
 
-                if (keywords is not null)
                     for (int i = keywords.Count - 1; i >= 0; i--)
                         if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
                             keywords.RemoveAt(i);
 
                 // I suspect that there is no need to reduce price as the final price factors in the enchantment.
+                keywords.Add(replicaKeyword.Value);
+
                 foreach (var enchantedArmor in enchantedArmorWithNoTemplate)
                     state.PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(newArmor);
             }
@@ -215,6 +219,8 @@ namespace CostumeShop
                 // Remove poor keyword, if any.
                 keywords.Remove(Skyrim.Keyword.ClothingPoor);
 
+                keywords.Add(costumeKeyword.Value);
+
                 newArmor.ArmorRating = 0;
 
                 newArmor.Weight /= CostumeArmorWeightFactor;
@@ -232,8 +238,11 @@ namespace CostumeShop
                 AddToLeveledLists(newArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
             }
 
-            // TODO create recipes
-        }
+        private IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
+            state.LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
+                ? keyword
+                : state.PatchMod.Keywords.AddNew(EditorID)
+            ).AsLink();
 
         private void AddToLeveledLists(List<IFormLink<Armor>> newArmorLinkList, string LeveledListBaseEditorID, IList<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
         {

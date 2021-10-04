@@ -258,7 +258,7 @@ namespace CostumeShop
                 {
                     Data = new()
                     {
-                        Count = 1,
+                        Count = 2,
                         Level = 1,
                         Reference = newLeveledItems.AsLink(),
                     }

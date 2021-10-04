@@ -138,7 +138,7 @@ namespace CostumeShop
                 armatures.Add(armor.Armature[0]);
             }
 
-            Console.WriteLine("Creating missing template (unenchaned) armor...");
+            Console.WriteLine("Creating missing template (unenchanted) armor...");
 
 
             foreach (var item in from armor in enchantedARMOsWithNoTemplate

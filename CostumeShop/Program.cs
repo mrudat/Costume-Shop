@@ -193,7 +193,13 @@ namespace CostumeShop
                 newArmor.BodyTemplate!.ArmorType = ArmorType.Clothing;
 
                 if (newArmor.Name is not null)
-                    newArmor.Name.String += " (Costume)";
+                {
+                    // TODO there's got to be a better way.
+                    var name = newArmor.Name.String;
+                    if (name?.EndsWith(" (Replica)") == true)
+                        name = name.Substring(0, name.Length - " (Replica)".Length);
+                    newArmor.Name.String = name + " (Costume)";
+                }
 
                 var keywords = newArmor.Keywords ??= new();
 

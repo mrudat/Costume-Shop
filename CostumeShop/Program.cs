@@ -139,16 +139,13 @@ namespace CostumeShop
             }
 
             Console.WriteLine("Creating missing template (unenchanted) armor...");
-
-
-            foreach (var item in from armor in enchantedARMOsWithNoTemplate
+            foreach (var enchantedArmorWithNoTemplate in from armor in enchantedARMOsWithNoTemplate
                                  where !armatures.Contains(armor.Armature[0])
                                  group armor by armor.Armature[0])
             {
+                var armor = enchantedArmorWithNoTemplate.OrderBy(i => i.Armature.Count).First();
 
-                var armor = item.OrderBy(i => i.Armature.Count).First();
-
-                var newArmorEditorID = "CostumeShop_" + ((ISkyrimMajorRecordGetter)(item.Count() == 1 ? armor : item.Key.Resolve(state.LinkCache))).EditorID;
+                var newArmorEditorID = "CostumeShop_" + ((ISkyrimMajorRecordGetter)(enchantedArmorWithNoTemplate.Count() == 1 ? armor : enchantedArmorWithNoTemplate.Key.Resolve(state.LinkCache))).EditorID;
 
                 var newArmor = state.PatchMod.Armors.AddNew(newArmorEditorID);
                 newArmorLinks.Add(newArmor.AsLink());

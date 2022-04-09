@@ -1,6 +1,8 @@
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Mutagen.Bethesda.Plugins;
+using Mutagen.Bethesda.Plugins.Cache;
+using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
 using Noggog;
@@ -12,30 +14,40 @@ using System.Threading.Tasks;
 
 namespace CostumeShop
 {
-    public class Program
+    public partial class Program
     {
-        private readonly IPatcherState<ISkyrimMod, ISkyrimModGetter> state;
+        private readonly ILoadOrder<IModListing<ISkyrimModGetter>> LoadOrder;
+        private readonly ILinkCache<ISkyrimMod, ISkyrimModGetter> LinkCache;
+        private readonly ISkyrimMod PatchMod;
+
+        private readonly List<IFormLinkGetter<IArmorGetter>> NewArmorLinks = new();
+        private readonly List<IFormLinkGetter<IArmorGetter>> NewCostumeLinks = new();
+
+        private readonly Lazy<IFormLinkGetter<IKeywordGetter>> replicaKeyword;
+        private readonly Lazy<IFormLinkGetter<IKeywordGetter>> costumeKeyword;
 
         private readonly static Armor.TranslationMask ArmorToClothesCopyMask = new(true)
         {
             EditorID = false,
-            ArmorRating = false
+            ArmorRating = false,
+            VirtualMachineAdapter = false
         };
 
         private readonly static Armor.TranslationMask ArmorToTemplateCopyMask = new(true)
         {
             EditorID = false,
             EnchantmentAmount = false,
-            ObjectEffect = false
+            ObjectEffect = false,
+            VirtualMachineAdapter = false
         };
 
-        private readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
+        public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
             Skyrim.LeveledItem.LItemClothesAll,
             Skyrim.LeveledItem.LItemMiscVendorClothing75,
             Skyrim.LeveledItem.LItemFineClothes50
         }.ToImmutableList();
 
-        private readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ArmorLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
+        public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ArmorLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
             Skyrim.LeveledItem.LItemBlacksmithArmor75
         }.ToImmutableList();
 
@@ -70,10 +82,7 @@ namespace CostumeShop
 
         private readonly static uint CostumeArmorPriceFactor = 5;
 
-        public Program(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-            this.state = state;
-        }
+        public Program(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) : this(state.LoadOrder, state.LinkCache, state.PatchMod) { }
 
         public static async Task<int> Main(string[] args)
         {
@@ -85,272 +94,104 @@ namespace CostumeShop
 
         public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
-            new Program(state).Run();
+            new Program(state.LoadOrder, state.LinkCache, state.PatchMod).Run();
         }
 
-        private void Run()
+        public Program(ILoadOrder<IModListing<ISkyrimModGetter>> loadOrder, ILinkCache<ISkyrimMod, ISkyrimModGetter> linkCache, ISkyrimMod patchMod)
         {
-            var ARMOs = state
-                .LoadOrder
+            LoadOrder = loadOrder;
+            LinkCache = linkCache;
+            PatchMod = patchMod;
+
+            replicaKeyword = new(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));
+            costumeKeyword = new(() => FindOrMakeKeyword("CostumeShop_CostumeKeyword"));
+        }
+
+        public void Run()
+        {
+            var ARMOs = LoadOrder
                 .PriorityOrder
                 .Armor()
                 .WinningOverrides()
                 .Where(i => i.BodyTemplate is not null)
-                .Where(i => i.Race.FormKey == Skyrim.Race.DefaultRace.FormKey)
+                .Where(i => i.Race.Equals(Skyrim.Race.DefaultRace))
                 .Where(i => i.Armature.Count > 0)
-                .ToDictionary(x => x.FormKey);
+                .ToDictionary(x => x.AsLinkGetter());
 
-            var replicaKeyword = new Lazy<IFormLinkGetter<IKeywordGetter>>(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));
-            var costumeKeyword = new Lazy<IFormLinkGetter<IKeywordGetter>>(() => FindOrMakeKeyword("CostumeShop_CostumeKeyword"));
-
-            var templateARMOLinks = new HashSet<IFormLinkGetter<IArmorGetter>>();
-            var unenchantedARMOs = new HashSet<IArmorGetter>();
-            var enchantedARMOsWithNoTemplate = new HashSet<IArmorGetter>();
+            var armorAppearanceIndex = new ArmorAppearanceIndex();
 
             Console.WriteLine("Classifying armor...");
             foreach (var armor in ARMOs.Values)
+                armorAppearanceIndex.Register(armor);
+
+            Console.WriteLine("Building missing armor...");
+            foreach (var armorAppearance in armorAppearanceIndex.ArmorsWithTheSameAppearance)
             {
-                if (armor.ObjectEffect.IsNull)
-                    unenchantedARMOs.Add(armor);
-                else
+                var enchantedArmors = armorAppearance.Get(ArmorClassification.EnchantedArmor);
+                var armors = armorAppearance.Get(ArmorClassification.Armor);
+                var enchantedClothes = armorAppearance.Get(ArmorClassification.EnchantedClothing);
+                var clothes = armorAppearance.Get(ArmorClassification.Clothing);
+
+                if (enchantedArmors is not null)
                 {
-                    if ((!armor.TemplateArmor.IsNull) && ARMOs.TryGetValue(armor.TemplateArmor.FormKey, out var templateArmor) && templateArmor.ObjectEffect.IsNull)
-                        templateARMOLinks.Add(armor.TemplateArmor);
+                    if (armors is null)
+                        armors = CreateUnenchantedArmor(enchantedArmors);
                     else
-                        enchantedARMOsWithNoTemplate.Add(armor);
+                        // TODO associate armors with enchantedArmors?
+                        EnsureAvailable(armors);
                 }
-            }
 
-            var templateARMOs = templateARMOLinks.Select(i => ARMOs[i.FormKey]).ToHashSet();
-
-            HashSet<IFormLinkGetter<IArmorAddonGetter>> armatures = new();
-
-            Console.WriteLine("Marking template armors as playable...");
-            List<IFormLink<IArmorGetter>> newArmorLinks = new();
-            List<IFormLink<IArmorGetter>> newCostumeLinks = new();
-
-            foreach (var armor in templateARMOs)
-            {
-                if (armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable))
+                if (enchantedClothes is not null)
                 {
-                    state.PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
-                    if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
-                        newCostumeLinks.Add(armor.AsLink());
+                    if (clothes is null)
+                        clothes = CreateUnenchantedArmor(enchantedClothes);
                     else
-                        newArmorLinks.Add(armor.AsLink());
+                        // TODO associate clothes with enchantedClothes?
+                        EnsureAvailable(clothes);
                 }
 
-                armatures.Add(armor.Armature[0]);
-            }
-
-            Console.WriteLine("Creating missing template (unenchanted) armor...");
-            foreach (var enchantedArmorWithNoTemplate in from armor in enchantedARMOsWithNoTemplate
-                                                         where !armatures.Contains(armor.Armature[0])
-                                                         group armor by armor.Armature[0])
-            {
-                var armor = enchantedArmorWithNoTemplate.OrderBy(i => i.Armature.Count).First();
-
-                var newArmorEditorID = "CostumeShop_" + ((ISkyrimMajorRecordGetter)(enchantedArmorWithNoTemplate.Count() == 1 ? armor : enchantedArmorWithNoTemplate.Key.Resolve(state.LinkCache))).EditorID;
-
-                var newArmor = state.PatchMod.Armors.AddNew(newArmorEditorID);
-                newArmorLinks.Add(newArmor.AsLink());
-                templateARMOs.Add(newArmor);
-
-                newArmor.DeepCopyIn(armor, out var copyError, ArmorToTemplateCopyMask);
-                if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
-
-                if (newArmor.Name is not null)
-                    newArmor.Name.String += " (Replica)";
-
-                newArmor.Description?.Clear();
-
-                var keywords = newArmor.Keywords ??= new();
-
-                for (int i = keywords.Count - 1; i >= 0; i--)
-                    if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
-                        keywords.RemoveAt(i);
-
-                keywords.Add(replicaKeyword.Value);
-
-                foreach (var enchantedArmor in enchantedArmorWithNoTemplate)
-                    state.PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(newArmor);
-            }
-
-            Console.WriteLine($"Created {newArmorLinks.Count} armor templates.");
-
-            Console.WriteLine("Creating costume (unarmored) variants of template armor...");
-            foreach (var armor in templateARMOs)
-            {
-                if (armor.BodyTemplate is null) continue;
-                if (armor.BodyTemplate.ArmorType is ArmorType.Clothing) continue;
-
-                var newArmor = state.PatchMod.Armors.AddNew("CostumeShop_" + armor.EditorID);
-
-                newCostumeLinks.Add(newArmor.AsLink());
-
-                newArmor.DeepCopyIn(armor, out var copyError, ArmorToClothesCopyMask);
-                if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
-
-                newArmor.BodyTemplate!.ArmorType = ArmorType.Clothing;
-
-                if (newArmor.Name is not null)
+                if (armors is not null)
                 {
-                    // TODO there's got to be a better way.
-                    var name = newArmor.Name.String;
-                    if (name?.EndsWith(" (Replica)") == true)
-                        name = name.Substring(0, name.Length - " (Replica)".Length);
-                    newArmor.Name.String = name + " (Costume)";
+                    if (clothes is null)
+                        clothes = CreateCostumeArmor(armors);
+                    else
+                        EnsureAvailable(clothes);
                 }
-
-                var keywords = newArmor.Keywords ??= new();
-
-                for (int i = keywords.Count - 1; i >= 0; i--)
-                {
-                    var keyword = keywords[i];
-                    if (ArmorKeywordsToClothesKeywords.TryGetValue(keyword, out var newKeyword))
-                        keywords[i] = newKeyword;
-
-                    if (KeywordsForbiddenOnCostumes.Contains(keyword))
-                        keywords.RemoveAt(i);
-                }
-
-                // The new costume armor contains less metal and more padding, upgrade it by one level of warmth.
-                if (keywords.Contains(Update.Keyword.Survival_ArmorCold))
-                    keywords.Remove(Update.Keyword.Survival_ArmorCold);
-                else
-                    if (!keywords.Contains(Update.Keyword.Survival_ArmorWarm))
-                    keywords.Add(Update.Keyword.Survival_ArmorWarm);
-
-                // Add rich keyword; cosplay is an expensive hobby.
-                keywords.Add(Skyrim.Keyword.ClothingRich);
-
-                // Remove poor keyword, if any.
-                keywords.Remove(Skyrim.Keyword.ClothingPoor);
-
-                keywords.Add(costumeKeyword.Value);
-
-                newArmor.ArmorRating = 0;
-
-                newArmor.Weight /= CostumeArmorWeightFactor;
-                newArmor.Value /= CostumeArmorPriceFactor;
             }
 
-            Console.WriteLine($"Created {newCostumeLinks.Count} costumes.");
+            Console.WriteLine($"Created {NewArmorLinks.Count} armor templates.");
 
-            if (newCostumeLinks.Count > 0 || newArmorLinks.Count > 0)
+            Console.WriteLine($"Created {NewCostumeLinks.Count} costumes.");
+
+            if (NewCostumeLinks.Count > 0 || NewArmorLinks.Count > 0)
             {
                 Console.WriteLine("Adding new items to LeveledLists...");
 
-                AddToLeveledLists(newCostumeLinks, "LItemMiscVendorClothing_CostumeShop", ClothesLeveledItemsFormLinkList);
+                AddToLeveledLists(NewCostumeLinks, "LItemMiscVendorClothing_CostumeShop", ClothesLeveledItemsFormLinkList);
 
-                AddToLeveledLists(newArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
+                AddToLeveledLists(NewArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
             }
         }
 
-        private IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
-            state.LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
-                ? keyword
-                : state.PatchMod.Keywords.AddNew(EditorID)
-            ).AsLink();
-
-        private void AddToLeveledLists(List<IFormLink<IArmorGetter>> newArmorLinkList, string LeveledListBaseEditorID, IList<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
+        private void EnsureAvailable(HashSet<IArmorGetter> armors)
         {
-            if (newArmorLinkList.Count == 0)
+            if (armors.Any(armor => !armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable)))
                 return;
 
-            var leveledItems = state.PatchMod.LeveledItems;
-
-            LeveledItem newLeveledItems = leveledItems.AddNew(LeveledListBaseEditorID);
-
-            foreach (var targetLeveledItemsFormLink in targetLeveledItemsFormLinkList)
-                (leveledItems.GetOrAddAsOverride(targetLeveledItemsFormLink.Resolve(state.LinkCache)).Entries ??= new()).Add(new()
-                {
-                    Data = new()
-                    {
-                        Count = 2,
-                        Level = 1,
-                        Reference = newLeveledItems.AsLink(),
-                    }
-                });
-
-            newLeveledItems.Entries = new();
-
-            newLeveledItems.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
-
-            if (newArmorLinkList.Count > 255)
+            foreach (var armor in armors)
             {
-                int subListCounter = 0;
-
-                List<IFormLink<IItemGetter>> subLists = new();
-
-                void AddThingsToThing(IEnumerable<IFormLink<IItemGetter>> subList)
-                {
-                    LeveledItem newSubList = leveledItems.AddNew(LeveledListBaseEditorID + "_" + subListCounter++);
-
-                    subLists.Add(newSubList.AsLink());
-
-                    newSubList.Entries = new();
-
-                    newSubList.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
-
-                    foreach (var newCostumeLink in subList)
-                        newSubList.Entries.Add(new()
-                        {
-                            Data = new()
-                            {
-                                Count = 1,
-                                Level = 1,
-                                Reference = newCostumeLink
-                            }
-                        });
-                }
-
-                foreach (var chunk in newArmorLinkList
-                    .Select((x, i) => (Index: i, Value: x))
-                    .GroupBy(x => x.Index / 255)
-                    .Select(x => x.Select(y => y.Value)))
-                    if ((chunk.Count() + subLists.Count) < 255)
-                        subLists.AddRange(chunk);
-                    else
-                        AddThingsToThing(chunk);
-
-                while (subLists.Count > 255)
-                {
-                    var oldSubLists = subLists;
-                    subLists = new();
-
-                    foreach (var chunk in oldSubLists
-                        .Select((x, i) => (Index: i, Value: x))
-                        .GroupBy(x => x.Index / 255)
-                        .Select(x => x.Select(y => y.Value)))
-                        if ((chunk.Count() + subLists.Count) < 255)
-                            subLists.AddRange(chunk);
-                        else
-                            AddThingsToThing(chunk);
-                }
-
-                foreach (var subList in subLists)
-                    newLeveledItems.Entries.Add(new()
-                    {
-                        Data = new()
-                        {
-                            Count = 1,
-                            Level = 1,
-                            Reference = subList
-                        }
-                    });
+                PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
+                if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
+                    NewCostumeLinks.Add(armor.AsLink());
+                else
+                    NewArmorLinks.Add(armor.AsLink());
             }
-            else
-                foreach (var newCostumeLink in newArmorLinkList)
-                    newLeveledItems.Entries.Add(new()
-                    {
-                        Data = new()
-                        {
-                            Count = 1,
-                            Level = 1,
-                            Reference = newCostumeLink,
-                        }
-                    });
         }
+
+        public IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
+            LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
+                ? keyword
+                : PatchMod.Keywords.AddNew(EditorID)
+            ).AsLink();
     }
 }

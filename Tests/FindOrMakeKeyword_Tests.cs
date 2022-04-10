@@ -17,7 +17,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            Program program = new(loadOrder, linkCache, patchMod);
+            Program program = new(loadOrder, linkCache, patchMod, Settings);
 
             program.FindOrMakeKeyword(editorID);
 

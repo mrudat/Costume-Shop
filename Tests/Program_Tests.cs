@@ -22,7 +22,7 @@ namespace Tests
         {
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            Program program = new(loadOrder, linkCache, patchMod);
+            Program program = new(loadOrder, linkCache, patchMod, Settings);
 
             program.Run();
 
@@ -102,7 +102,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            new Program(loadOrder, linkCache, patchMod).Run();
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
 
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
@@ -157,7 +157,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            new Program(loadOrder, linkCache, patchMod).Run();
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
 
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
@@ -216,7 +216,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            new Program(loadOrder, linkCache, patchMod).Run();
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
 
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
@@ -263,7 +263,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            new Program(loadOrder, linkCache, patchMod).Run();
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
 
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
@@ -346,7 +346,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            new Program(loadOrder, linkCache, patchMod).Run();
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
 
             linkCache = loadOrder.ToImmutableLinkCache();
 
@@ -362,6 +362,47 @@ namespace Tests
             var updatedEnchantedArmor1 = enchantedArmor1.AsLinkGetter().Resolve(linkCache);
             Assert.NotSame(enchantedArmor1, updatedEnchantedArmor1);
             Assert.False(updatedEnchantedArmor1.TemplateArmor.IsNull);
+        }
+
+        [Fact]
+        public void TestMultipleARMAs()
+        {
+            var armature1 = new ArmorAddon(masterMod, "ArmorAA");
+            masterMod.ArmorAddons.Add(armature1);
+
+            var armature2 = new ArmorAddon(masterMod, "ArmorAA2");
+            masterMod.ArmorAddons.Add(armature2);
+
+            var armor1 = new Armor(masterMod, "Armor1");
+            armor1.Race.SetTo(Skyrim.Race.DefaultRace);
+            armor1.BodyTemplate ??= new();
+            armor1.BodyTemplate.ArmorType = ArmorType.LightArmor;
+            armor1.Armature.Add(armature1);
+            masterMod.Armors.Add(armor1);
+
+            var armor2 = new Armor(masterMod, "Armor2");
+            armor2.Race.SetTo(Skyrim.Race.DefaultRace);
+            armor2.BodyTemplate ??= new();
+            armor2.BodyTemplate.ArmorType = ArmorType.LightArmor;
+            armor2.Armature.Add(armature1);
+            armor2.Armature.Add(armature2);
+            masterMod.Armors.Add(armor2);
+
+
+            var linkCache = loadOrder.ToImmutableLinkCache();
+
+            new Program(loadOrder, linkCache, patchMod, Settings).Run();
+
+            CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
+
+            Assert.Null(foundEnchantedArmors);
+            Assert.Null(foundEnchantedCostumes);
+
+            Assert.NotNull(foundArmors);
+            Assert.NotNull(foundCostumes);
+
+            Assert.Equal(2, foundArmors?.Count);
+            Assert.Equal(2, foundCostumes?.Count);
         }
     }
 }

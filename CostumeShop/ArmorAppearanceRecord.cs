@@ -1,6 +1,7 @@
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Noggog;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 
@@ -8,13 +9,13 @@ namespace CostumeShop
 {
     public class ArmorAppearanceRecord
     {
-        public readonly ImmutableHashSet<IFormLinkGetter<IArmorAddonGetter>> armatures;
+        public readonly IReadOnlyList<IFormLinkGetter<IArmorAddonGetter>> armatures;
 
         public readonly Dictionary<ArmorClassification, HashSet<IArmorGetter>> ARMOs = new();
 
         public ArmorAppearanceRecord(IReadOnlyList<IFormLinkGetter<IArmorAddonGetter>> armature)
         {
-            this.armatures = armature.ToImmutableHashSet();
+            this.armatures = armature;
         }
 
         public bool Add(IArmorGetter armor)
@@ -22,7 +23,7 @@ namespace CostumeShop
             return ARMOs.GetOrAdd(Program.Classify(armor)).Add(armor);
         }
 
-        public void Get2(
+        public void GetClassified(
             out HashSet<IArmorGetter>? enchantedArmors,
             out HashSet<IArmorGetter>? armors,
             out HashSet<IArmorGetter>? enchantedClothes,
@@ -33,6 +34,5 @@ namespace CostumeShop
             ARMOs.TryGetValue(ArmorClassification.EnchantedClothing, out enchantedClothes);
             ARMOs.TryGetValue(ArmorClassification.Clothing, out clothes);
         }
-
     }
 }

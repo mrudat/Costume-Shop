@@ -25,9 +25,9 @@ namespace CostumeShop
             {
                 // TODO there's got to be a better way.
                 var name = newArmor.Name.String;
-                if (name?.EndsWith(" (Replica)") == true)
-                    name = name.Substring(0, name.Length - " (Replica)".Length);
-                newArmor.Name.String = name + " (Costume)";
+                if (name?.EndsWith(settings.Value.ReplicaSuffix) == true)
+                    name = name.Substring(0, name.Length - settings.Value.ReplicaSuffix.Length);
+                newArmor.Name.String = name + settings.Value.CostumeSuffix;
             }
 
             var keywords = newArmor.Keywords ??= new();
@@ -43,7 +43,8 @@ namespace CostumeShop
             }
 
             // The new costume armor contains less metal and more padding, upgrade it by one level of warmth.
-            MakeWarmer(newArmor);
+            if(settings.Value.MakeCostumeArmorWarmer)
+                MakeWarmer(newArmor);
 
             // Add rich keyword; cosplay is an expensive hobby.
             keywords.Add(Skyrim.Keyword.ClothingRich);
@@ -55,8 +56,8 @@ namespace CostumeShop
 
             newArmor.ArmorRating = 0;
 
-            newArmor.Weight /= CostumeArmorWeightFactor;
-            newArmor.Value /= CostumeArmorPriceFactor;
+            newArmor.Weight /= settings.Value.CostumeArmorWeightDivisor;
+            newArmor.Value = (uint)(newArmor.Value / settings.Value.CostumeArmorPriceDivisor);
 
             RegisterCostumeLinks(newArmor);
             return new HashSet<IArmorGetter>() { newArmor };

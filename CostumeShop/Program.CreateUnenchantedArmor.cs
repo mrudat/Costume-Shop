@@ -22,7 +22,7 @@ namespace CostumeShop
             if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
 
             if (newArmor.Name is not null)
-                newArmor.Name.String += " (Replica)";
+                newArmor.Name.String += settings.Value.ReplicaSuffix;
 
             newArmor.Description = null;
 

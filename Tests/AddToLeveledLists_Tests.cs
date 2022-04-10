@@ -22,7 +22,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            Program program = new(loadOrder, linkCache, patchMod);
+            Program program = new(loadOrder, linkCache, patchMod, Settings);
 
             program.AddToLeveledLists(stuff, "Stuff", Program.ClothesLeveledItemsFormLinkList);
 
@@ -49,7 +49,7 @@ namespace Tests
 
             var linkCache = loadOrder.ToImmutableLinkCache();
 
-            Program program = new(loadOrder, linkCache, patchMod);
+            Program program = new(loadOrder, linkCache, patchMod, Settings);
 
             program.AddToLeveledLists(stuff, "Stuff", Program.ArmorLeveledItemsFormLinkList);
 
@@ -66,16 +66,16 @@ namespace Tests
 
         private static HashSet<IFormLinkGetter<IArmorGetter>> FindAllEntires(IFormLinkGetter<ILeveledItemGetter> llstLink, Mutagen.Bethesda.Plugins.Cache.Internals.Implementations.ImmutableLoadOrderLinkCache<ISkyrimMod, ISkyrimModGetter> linkCache)
         {
-            Queue<IFormLinkGetter<ILeveledItemGetter>> queue = new();
+            Stack<IFormLinkGetter<ILeveledItemGetter>> stack = new();
             HashSet<IFormLinkGetter<IArmorGetter>> found = new();
             HashSet<IFormLinkGetter<ILeveledItemGetter>> seen = new();
 
-            queue.Enqueue(llstLink);
+            stack.Push(llstLink);
             seen.Add(llstLink);
 
-            while (queue.Count > 0)
+            while (stack.Count > 0)
             {
-                llstLink = queue.Dequeue();
+                llstLink = stack.Pop();
                 var llst = llstLink.Resolve(linkCache);
 
                 if (llst.Entries is null)
@@ -90,7 +90,7 @@ namespace Tests
                     else
                         if (entry.Data.Reference.TryResolve<ILeveledItemGetter>(linkCache, out var llst2))
                         if (seen.Add(llst2.AsLinkGetter()))
-                            queue.Enqueue(llst2.AsLinkGetter());
+                            stack.Push(llst2.AsLinkGetter());
                 }
             }
 

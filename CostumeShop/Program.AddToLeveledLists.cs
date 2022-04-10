@@ -37,7 +37,7 @@ namespace CostumeShop
                 {
                     Data = new()
                     {
-                        Count = 2,
+                        Count = settings.Value.LeveledListMultipilier,
                         Level = 1,
                         Reference = newLeveledItems.AsLink(),
                     }

@@ -2,6 +2,7 @@ using CostumeShop;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Skyrim;
+using System;
 using System.Linq;
 
 namespace Tests
@@ -16,6 +17,9 @@ namespace Tests
         protected readonly SkyrimMod patchMod;
         protected readonly LoadOrder<IModListing<ISkyrimModGetter>> loadOrder;
 
+        protected readonly Settings settings = new();
+        protected readonly Lazy<Settings> Settings;
+
         public TestBase()
         {
             masterMod = new SkyrimMod(masterModKey, SkyrimRelease.SkyrimSE);
@@ -26,6 +30,8 @@ namespace Tests
                 new ModListing<ISkyrimModGetter>(masterMod, true),
                 new ModListing<ISkyrimModGetter>(patchMod, true)
             };
+
+            Settings = new(settings);
         }
 
         public void AddLLSTs()

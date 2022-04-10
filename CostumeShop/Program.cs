@@ -26,6 +26,10 @@ namespace CostumeShop
         private readonly Lazy<IFormLinkGetter<IKeywordGetter>> replicaKeyword;
         private readonly Lazy<IFormLinkGetter<IKeywordGetter>> costumeKeyword;
 
+        private readonly Dictionary<IFormLinkGetter<IArmorAddonGetter>, Dictionary<int, HashSet<ArmorAppearanceRecord>>> armorAppearanceByArmature = new();
+
+        private readonly List<ArmorAppearanceRecord> ArmorsWithTheSameAppearance = new();
+
         private readonly static Armor.TranslationMask ArmorToClothesCopyMask = new(true)
         {
             EditorID = false,
@@ -118,27 +122,24 @@ namespace CostumeShop
                 .Where(i => i.Armature.Count > 0)
                 .ToDictionary(x => x.AsLinkGetter());
 
-            var armorAppearanceIndex = new ArmorAppearanceIndex();
-
             Console.WriteLine("Classifying armor...");
             foreach (var armor in ARMOs.Values)
-                armorAppearanceIndex.Register(armor);
+                Register(armor);
 
             Console.WriteLine("Building missing armor...");
-            foreach (var armorAppearance in armorAppearanceIndex.ArmorsWithTheSameAppearance)
+            foreach (var armorAppearance in ArmorsWithTheSameAppearance)
             {
-                var enchantedArmors = armorAppearance.Get(ArmorClassification.EnchantedArmor);
-                var armors = armorAppearance.Get(ArmorClassification.Armor);
-                var enchantedClothes = armorAppearance.Get(ArmorClassification.EnchantedClothing);
-                var clothes = armorAppearance.Get(ArmorClassification.Clothing);
+                armorAppearance.Get2(out var enchantedArmors, out var armors, out var enchantedClothes, out var clothes);
 
                 if (enchantedArmors is not null)
                 {
                     if (armors is null)
                         armors = CreateUnenchantedArmor(enchantedArmors);
                     else
-                        // TODO associate armors with enchantedArmors?
+                    {
                         EnsureAvailable(armors);
+                        SetTemplateArmor(enchantedArmors, armors);
+                    }
                 }
 
                 if (enchantedClothes is not null)
@@ -146,8 +147,10 @@ namespace CostumeShop
                     if (clothes is null)
                         clothes = CreateUnenchantedArmor(enchantedClothes);
                     else
-                        // TODO associate clothes with enchantedClothes?
+                    {
                         EnsureAvailable(clothes);
+                        SetTemplateArmor(enchantedClothes, clothes);
+                    }
                 }
 
                 if (armors is not null)
@@ -173,7 +176,7 @@ namespace CostumeShop
             }
         }
 
-        private void EnsureAvailable(HashSet<IArmorGetter> armors)
+        public void EnsureAvailable(HashSet<IArmorGetter> armors)
         {
             if (armors.Any(armor => !armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable)))
                 return;
@@ -181,10 +184,38 @@ namespace CostumeShop
             foreach (var armor in armors)
             {
                 PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
-                if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
+                RegisterCostumeLinks(armor);
+            }
+        }
+
+        private void RegisterCostumeLinks(IArmorGetter armor)
+        {
+            switch (armor.BodyTemplate!.ArmorType)
+            {
+                case ArmorType.Clothing:
                     NewCostumeLinks.Add(armor.AsLink());
-                else
+                    break;
+                default:
                     NewArmorLinks.Add(armor.AsLink());
+                    break;
+            }
+        }
+
+        public static ArmorClassification Classify(IArmorGetter armor)
+        {
+            if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
+            {
+                if (armor.ObjectEffect.IsNull)
+                    return ArmorClassification.Clothing;
+                else
+                    return ArmorClassification.EnchantedClothing;
+            }
+            else
+            {
+                if (armor.ObjectEffect.IsNull)
+                    return ArmorClassification.Armor;
+                else
+                    return ArmorClassification.EnchantedArmor;
             }
         }
 

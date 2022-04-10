@@ -1,5 +1,3 @@
-using Mutagen.Bethesda.Skyrim;
-
 namespace CostumeShop
 {
     public enum ArmorClassification

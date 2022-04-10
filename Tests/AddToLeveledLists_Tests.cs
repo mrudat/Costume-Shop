@@ -2,10 +2,9 @@ using CostumeShop;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
-using Noggog;
 using System.Collections.Generic;
-using Xunit;
 using System.Linq;
+using Xunit;
 
 namespace Tests
 {
@@ -90,8 +89,8 @@ namespace Tests
                         found.Add(armor.AsLinkGetter());
                     else
                         if (entry.Data.Reference.TryResolve<ILeveledItemGetter>(linkCache, out var llst2))
-                            if (seen.Add(llst2.AsLinkGetter()))
-                                queue.Enqueue(llst2.AsLinkGetter());
+                        if (seen.Add(llst2.AsLinkGetter()))
+                            queue.Enqueue(llst2.AsLinkGetter());
                 }
             }
 

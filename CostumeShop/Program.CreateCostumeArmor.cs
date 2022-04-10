@@ -16,8 +16,6 @@ namespace CostumeShop
 
             var newArmor = PatchMod.Armors.AddNew("CostumeShop_" + armor.EditorID);
 
-            NewCostumeLinks.Add(newArmor.AsLink());
-
             newArmor.DeepCopyIn(armor, out var copyError, ArmorToClothesCopyMask);
             if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
 
@@ -45,11 +43,7 @@ namespace CostumeShop
             }
 
             // The new costume armor contains less metal and more padding, upgrade it by one level of warmth.
-            if (keywords.Contains(Update.Keyword.Survival_ArmorCold))
-                keywords.Remove(Update.Keyword.Survival_ArmorCold);
-            else
-                if (!keywords.Contains(Update.Keyword.Survival_ArmorWarm))
-                keywords.Add(Update.Keyword.Survival_ArmorWarm);
+            MakeWarmer(newArmor);
 
             // Add rich keyword; cosplay is an expensive hobby.
             keywords.Add(Skyrim.Keyword.ClothingRich);
@@ -64,7 +58,18 @@ namespace CostumeShop
             newArmor.Weight /= CostumeArmorWeightFactor;
             newArmor.Value /= CostumeArmorPriceFactor;
 
+            RegisterCostumeLinks(newArmor);
             return new HashSet<IArmorGetter>() { newArmor };
+        }
+
+        private static void MakeWarmer(Armor armor)
+        {
+            var keywords = armor.Keywords!;
+            if (keywords.Contains(Update.Keyword.Survival_ArmorCold))
+                keywords.Remove(Update.Keyword.Survival_ArmorCold);
+            else
+                if (!keywords.Contains(Update.Keyword.Survival_ArmorWarm))
+                keywords.Add(Update.Keyword.Survival_ArmorWarm);
         }
     }
 }

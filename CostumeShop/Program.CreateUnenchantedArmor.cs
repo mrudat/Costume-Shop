@@ -17,10 +17,6 @@ namespace CostumeShop
             var newArmorEditorID = "CostumeShop_" + armor.EditorID;
 
             var newArmor = PatchMod.Armors.AddNew(newArmorEditorID);
-            if (armor.BodyTemplate!.ArmorType == ArmorType.Clothing)
-                NewCostumeLinks.Add(newArmor.AsLink());
-            else
-                NewArmorLinks.Add(newArmor.AsLink());
 
             newArmor.DeepCopyIn(armor, out var copyError, ArmorToTemplateCopyMask);
             if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
@@ -28,7 +24,7 @@ namespace CostumeShop
             if (newArmor.Name is not null)
                 newArmor.Name.String += " (Replica)";
 
-            newArmor.Description?.Clear();
+            newArmor.Description = null;
 
             var keywords = newArmor.Keywords ??= new();
 
@@ -38,10 +34,30 @@ namespace CostumeShop
 
             keywords.Add(replicaKeyword.Value);
 
-            foreach (var enchantedArmor in enchantedArmors)
-                PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(newArmor);
+            SetTemplateArmor(enchantedArmors, newArmor);
 
+            RegisterCostumeLinks(newArmor);
             return new HashSet<IArmorGetter>() { newArmor };
+        }
+
+        private void SetTemplateArmor(HashSet<IArmorGetter> enchantedArmors, IArmorGetter armor)
+        {
+            var armorLink = armor.AsLinkGetter();
+            foreach (var enchantedArmor in enchantedArmors.Where(a => !a.TemplateArmor.Equals(armorLink)))
+                PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(armor);
+        }
+
+        private void SetTemplateArmor(HashSet<IArmorGetter> enchantedArmors, HashSet<IArmorGetter> armors)
+        {
+            var targetArmor = armors.First();
+            if (armors.CountGreaterThan(1))
+            {
+                var links = armors.Select(armor => armor.AsLinkGetter());
+                foreach (var enchantedArmor in enchantedArmors.Where(enchantedArmor => !links.Contains(enchantedArmor.TemplateArmor)))
+                    PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(targetArmor);
+            }
+            else
+                SetTemplateArmor(enchantedArmors, targetArmor);
         }
     }
 }

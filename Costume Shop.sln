@@ -9,8 +9,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{9D13473B-E9EE-4524-8F29-0F97C67D6532}"
 	ProjectSection(SolutionItems) = preProject
 		.releaserc = .releaserc
-		ci-dev.yaml = ci-dev.yaml
-		ci-prod.yaml = ci-prod.yaml
+		.github\workflows\ci-dev.yaml = .github\workflows\ci-dev.yaml
+		.github\workflows\ci-prod.yaml = .github\workflows\ci-prod.yaml
 		coverlet.runsettings = coverlet.runsettings
 		README.md = README.md
 		renovate.json = renovate.json

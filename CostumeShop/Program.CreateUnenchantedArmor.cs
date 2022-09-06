@@ -10,6 +10,15 @@ namespace CostumeShop
     public partial class Program
     {
 
+        private readonly static Armor.TranslationMask ArmorToTemplateCopyMask = new(true)
+        {
+            EditorID = false,
+            EnchantmentAmount = false,
+            ObjectEffect = false,
+            VirtualMachineAdapter = false,
+            TemplateArmor = false,
+        };
+
         private HashSet<IArmorGetter> CreateUnenchantedArmor(HashSet<IArmorGetter> enchantedArmors)
         {
             var armor = enchantedArmors.OrderBy(i => i.Armature.Count).First();
@@ -42,7 +51,7 @@ namespace CostumeShop
 
         private void SetTemplateArmor(HashSet<IArmorGetter> enchantedArmors, IArmorGetter armor)
         {
-            var armorLink = armor.AsLinkGetter();
+            var armorLink = armor.ToLinkGetter();
             foreach (var enchantedArmor in enchantedArmors.Where(a => !a.TemplateArmor.Equals(armorLink)))
                 PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(armor);
         }
@@ -52,7 +61,7 @@ namespace CostumeShop
             var targetArmor = armors.First();
             if (armors.CountGreaterThan(1))
             {
-                var links = armors.Select(armor => armor.AsLinkGetter());
+                var links = armors.Select(armor => armor.ToLinkGetter());
                 foreach (var enchantedArmor in enchantedArmors.Where(enchantedArmor => !links.Contains(enchantedArmor.TemplateArmor)))
                     PatchMod.Armors.GetOrAddAsOverride(enchantedArmor).TemplateArmor.SetTo(targetArmor);
             }

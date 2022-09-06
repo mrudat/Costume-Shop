@@ -39,14 +39,6 @@ namespace CostumeShop
             VirtualMachineAdapter = false
         };
 
-        private readonly static Armor.TranslationMask ArmorToTemplateCopyMask = new(true)
-        {
-            EditorID = false,
-            EnchantmentAmount = false,
-            ObjectEffect = false,
-            VirtualMachineAdapter = false
-        };
-
         public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
             Skyrim.LeveledItem.LItemClothesAll,
             Skyrim.LeveledItem.LItemMiscVendorClothing75,
@@ -232,7 +224,7 @@ namespace CostumeShop
         {
             ArmorType.Clothing => NewCostumeLinks,
             _ => NewArmorLinks,
-        }).Add(armor.AsLink());
+        }).Add(armor.ToLink());
 
         public static ArmorClassification Classify(IArmorGetter armor) => armor.BodyTemplate!.ArmorType switch
         {
@@ -244,6 +236,6 @@ namespace CostumeShop
             LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
                 ? keyword
                 : PatchMod.Keywords.AddNew(EditorID)
-            ).AsLink();
+            ).ToLink();
     }
 }

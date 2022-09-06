@@ -39,7 +39,7 @@ namespace CostumeShop
                     {
                         Count = settings.Value.LeveledListMultipilier,
                         Level = 1,
-                        Reference = newLeveledItems.AsLink(),
+                        Reference = newLeveledItems.ToLink(),
                     }
                 });
 
@@ -57,7 +57,7 @@ namespace CostumeShop
                 {
                     LeveledItem newSubList = leveledItems.AddNew(LeveledListBaseEditorID + "_" + subListCounter++);
 
-                    subLists.Add(newSubList.AsLink());
+                    subLists.Add(newSubList.ToLink());
 
                     newSubList.Entries = new();
 

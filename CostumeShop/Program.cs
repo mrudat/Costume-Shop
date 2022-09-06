@@ -39,14 +39,6 @@ namespace CostumeShop
             VirtualMachineAdapter = false
         };
 
-        private readonly static Armor.TranslationMask ArmorToTemplateCopyMask = new(true)
-        {
-            EditorID = false,
-            EnchantmentAmount = false,
-            ObjectEffect = false,
-            VirtualMachineAdapter = false
-        };
-
         public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
             Skyrim.LeveledItem.LItemClothesAll,
             Skyrim.LeveledItem.LItemMiscVendorClothing75,

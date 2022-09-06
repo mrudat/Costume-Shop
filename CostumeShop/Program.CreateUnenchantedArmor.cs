@@ -10,6 +10,15 @@ namespace CostumeShop
     public partial class Program
     {
 
+        private readonly static Armor.TranslationMask ArmorToTemplateCopyMask = new(true)
+        {
+            EditorID = false,
+            EnchantmentAmount = false,
+            ObjectEffect = false,
+            VirtualMachineAdapter = false,
+            TemplateArmor = false,
+        };
+
         private HashSet<IArmorGetter> CreateUnenchantedArmor(HashSet<IArmorGetter> enchantedArmors)
         {
             var armor = enchantedArmors.OrderBy(i => i.Armature.Count).First();

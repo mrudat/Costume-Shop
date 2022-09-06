@@ -17,6 +17,21 @@ namespace Tests
             AddLLSTs();
         }
 
+        private static void AssertNotEnchanted(IArmorGetter unenchanted)
+        {
+            Assert.Null(unenchanted.VirtualMachineAdapter);
+            Assert.Null(unenchanted.EnchantmentAmount);
+            Assert.True(unenchanted.ObjectEffect.IsNull);
+            Assert.True(unenchanted.TemplateArmor.IsNull);
+        }
+
+        private static void AssertUnarmored(IArmorGetter unarmored)
+        {
+            Assert.Equal(0, unarmored.ArmorRating);
+            if (unarmored.BodyTemplate is not null)
+                Assert.Equal(ArmorType.Clothing, unarmored.BodyTemplate.ArmorType);
+        }
+
         [Fact]
         public void DoingNothingAddsNoNewRecords()
         {
@@ -107,22 +122,38 @@ namespace Tests
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
             if (expectCostume > 0)
-                Assert.Single(foundCostumes);
+            {
+                Assert.NotNull(foundCostumes);
+                var foundCostume = Assert.Single(foundCostumes);
+                AssertUnarmored(foundCostume);
+                AssertNotEnchanted(foundCostume);
+            }
             else
                 Assert.Null(foundCostumes);
 
             if (expectEnchantedCostume > 0)
-                Assert.Single(foundEnchantedCostumes);
+            {
+                Assert.NotNull(foundEnchantedCostumes);
+                var foundEnchantedCostume = Assert.Single(foundEnchantedCostumes);
+                AssertUnarmored(foundEnchantedCostume);
+            }
             else
                 Assert.Null(foundEnchantedCostumes);
 
             if (expectArmor > 0)
-                Assert.Single(foundArmors);
+            {
+                Assert.NotNull(foundArmors);
+                var foundArmor = Assert.Single(foundArmors);
+                AssertNotEnchanted(foundArmor);
+            }
             else
                 Assert.Null(foundArmors);
 
             if (expectEnchantedArmor > 0)
+            {
+                Assert.NotNull(foundEnchantedArmors);
                 Assert.Single(foundEnchantedArmors);
+            }
             else
                 Assert.Null(foundEnchantedArmors);
         }
@@ -162,9 +193,12 @@ namespace Tests
             CollectArmor(out var foundCostumes, out var foundEnchantedCostumes, out var foundArmors, out var foundEnchantedArmors);
 
             Assert.Null(foundEnchantedCostumes);
+            Assert.NotNull(foundEnchantedArmors);
             Assert.Single(foundEnchantedArmors);
 
+            Assert.NotNull(foundArmors);
             var foundArmor = Assert.Single(foundArmors);
+            AssertNotEnchanted(foundArmor);
 
             Assert.Equal("An Enchanted Armor (Replica)", foundArmor.Name?.String);
             Assert.Null(foundArmor.Description);
@@ -174,7 +208,10 @@ namespace Tests
             Assert.True(armorKeywords.Contains(Skyrim.Keyword.PerkFistsSteel.FormKey));
             Assert.True(armorKeywords.Contains(Update.Keyword.Survival_ArmorCold.FormKey));
             Assert.False(armorKeywords.Contains(Skyrim.Keyword.MagicDisallowEnchanting.FormKey));
+            Assert.NotNull(foundCostumes);
             var foundCostume = Assert.Single(foundCostumes);
+            AssertNotEnchanted(foundCostume);
+            AssertUnarmored(foundCostume);
 
             Assert.Equal("An Enchanted Armor (Costume)", foundCostume.Name?.String);
             Assert.Null(foundCostume.Description);
@@ -222,9 +259,13 @@ namespace Tests
 
             Assert.Null(foundArmors);
             Assert.Null(foundEnchantedArmors);
+            Assert.NotNull(foundEnchantedCostumes);
             Assert.Single(foundEnchantedCostumes);
 
+            Assert.NotNull(foundCostumes);
             var foundCostume = Assert.Single(foundCostumes);
+            AssertNotEnchanted(foundCostume);
+            AssertUnarmored(foundCostume);
 
             Assert.Equal("Enchanted Gloves (Replica)", foundCostume.Name?.String);
             Assert.Null(foundCostume.Description);
@@ -269,8 +310,10 @@ namespace Tests
 
             Assert.Null(foundEnchantedCostumes);
             Assert.Null(foundEnchantedArmors);
+            Assert.NotNull(foundArmors);
             Assert.Single(foundArmors);
 
+            Assert.NotNull(foundCostumes);
             var foundCostume = Assert.Single(foundCostumes);
 
             Assert.False(foundCostume.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable));
@@ -350,16 +393,16 @@ namespace Tests
 
             linkCache = loadOrder.ToImmutableLinkCache();
 
-            var updatedTemplate1 = template1.AsLinkGetter().Resolve(linkCache);
+            var updatedTemplate1 = template1.ToLinkGetter().Resolve(linkCache);
             Assert.Same(template1, updatedTemplate1);
 
-            var updatedTemplate2 = template2.AsLinkGetter().Resolve(linkCache);
+            var updatedTemplate2 = template2.ToLinkGetter().Resolve(linkCache);
             Assert.Same(template2, updatedTemplate2);
 
-            var updatedEnchantedArmor2 = enchantedArmor2.AsLinkGetter().Resolve(linkCache);
+            var updatedEnchantedArmor2 = enchantedArmor2.ToLinkGetter().Resolve(linkCache);
             Assert.Same(enchantedArmor2, updatedEnchantedArmor2);
 
-            var updatedEnchantedArmor1 = enchantedArmor1.AsLinkGetter().Resolve(linkCache);
+            var updatedEnchantedArmor1 = enchantedArmor1.ToLinkGetter().Resolve(linkCache);
             Assert.NotSame(enchantedArmor1, updatedEnchantedArmor1);
             Assert.False(updatedEnchantedArmor1.TemplateArmor.IsNull);
         }

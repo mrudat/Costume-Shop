@@ -224,7 +224,7 @@ namespace CostumeShop
         {
             ArmorType.Clothing => NewCostumeLinks,
             _ => NewArmorLinks,
-        }).Add(armor.AsLink());
+        }).Add(armor.ToLink());
 
         public static ArmorClassification Classify(IArmorGetter armor) => armor.BodyTemplate!.ArmorType switch
         {
@@ -236,6 +236,6 @@ namespace CostumeShop
             LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
                 ? keyword
                 : PatchMod.Keywords.AddNew(EditorID)
-            ).AsLink();
+            ).ToLink();
     }
 }

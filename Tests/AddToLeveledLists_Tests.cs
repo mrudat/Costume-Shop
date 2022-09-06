@@ -42,7 +42,7 @@ namespace Tests
             for (int i = count; i > 0; i--)
             {
                 IArmorGetter armor = masterMod.Armors.AddNew($"AnArmor_{i}");
-                stuff.Add(armor.AsLinkGetter());
+                stuff.Add(armor.ToLinkGetter());
             }
 
             var stuffSet = stuff.ToHashSet();
@@ -86,11 +86,11 @@ namespace Tests
                     if (entry.Data?.Reference?.IsNull != false)
                         continue;
                     if (entry.Data.Reference.TryResolve<IArmorGetter>(linkCache, out var armor))
-                        found.Add(armor.AsLinkGetter());
+                        found.Add(armor.ToLinkGetter());
                     else
                         if (entry.Data.Reference.TryResolve<ILeveledItemGetter>(linkCache, out var llst2))
-                        if (seen.Add(llst2.AsLinkGetter()))
-                            stack.Push(llst2.AsLinkGetter());
+                        if (seen.Add(llst2.ToLinkGetter()))
+                            stack.Push(llst2.ToLinkGetter());
                 }
             }
 

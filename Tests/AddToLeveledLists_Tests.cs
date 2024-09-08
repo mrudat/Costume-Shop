@@ -6,97 +6,94 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace Tests
+namespace Tests;
+
+public class AddToLeveledLists_Tests : TestBase
 {
-    public class AddToLeveledLists_Tests : TestBase
+    public AddToLeveledLists_Tests() : base()
     {
-        public AddToLeveledLists_Tests() : base()
+        AddLLSTs();
+    }
+
+    [Fact]
+    public void DoesNothing()
+    {
+        List<IFormLinkGetter<IArmorGetter>> stuff = new();
+
+        var linkCache = loadOrder.ToImmutableLinkCache();
+
+        Program program = new(loadOrder, linkCache, patchMod, Settings);
+
+        program.AddToLeveledLists(stuff, "Stuff", Program.ClothesLeveledItemsFormLinkList);
+
+        Assert.Empty(patchMod.EnumerateMajorRecords());
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(500)]
+    [InlineData(70000)]
+    public void AddLots(int count)
+    {
+        List<IFormLinkGetter<IArmorGetter>> stuff = new();
+
+        for (int i = count; i > 0; i--)
         {
-            AddLLSTs();
+            IArmorGetter armor = masterMod.Armors.AddNew($"AnArmor_{i}");
+            stuff.Add(armor.ToLinkGetter());
         }
 
-        [Fact]
-        public void DoesNothing()
+        var stuffSet = stuff.ToHashSet();
+
+        var linkCache = loadOrder.ToImmutableLinkCache();
+
+        Program program = new(loadOrder, linkCache, patchMod, Settings);
+
+        program.AddToLeveledLists(stuff, "Stuff", Program.ArmorLeveledItemsFormLinkList);
+
+        linkCache = loadOrder.ToImmutableLinkCache();
+
+        foreach (var item in Program.ArmorLeveledItemsFormLinkList)
         {
-            List<IFormLinkGetter<IArmorGetter>> stuff = new();
+            var found = FindAllEntires(item, linkCache);
 
-            var linkCache = loadOrder.ToImmutableLinkCache();
-
-            Program program = new(loadOrder, linkCache, patchMod, Settings);
-
-            program.AddToLeveledLists(stuff, "Stuff", Program.ClothesLeveledItemsFormLinkList);
-
-            Assert.Empty(patchMod.EnumerateMajorRecords());
+            Assert.Equal(stuff.Count, found.Count);
+            Assert.True(found.All(i => stuffSet.Contains(i)));
         }
+    }
 
-        [Theory]
-        [InlineData(0)]
-        [InlineData(1)]
-        [InlineData(10)]
-        [InlineData(500)]
-        [InlineData(70000)]
-        public void AddLots(int count)
+    private static HashSet<IFormLinkGetter<IArmorGetter>> FindAllEntires(IFormLinkGetter<ILeveledItemGetter> llstLink, Mutagen.Bethesda.Plugins.Cache.Internals.Implementations.ImmutableLoadOrderLinkCache<ISkyrimMod, ISkyrimModGetter> linkCache)
+    {
+        Stack<IFormLinkGetter<ILeveledItemGetter>> stack = new();
+        HashSet<IFormLinkGetter<IArmorGetter>> found = new();
+        HashSet<IFormLinkGetter<ILeveledItemGetter>> seen = new();
+
+        stack.Push(llstLink);
+        seen.Add(llstLink);
+
+        while (stack.Count > 0)
         {
-            List<IFormLinkGetter<IArmorGetter>> stuff = new();
+            llstLink = stack.Pop();
+            var llst = llstLink.Resolve(linkCache);
 
-            for (int i = count; i > 0; i--)
+            if (llst.Entries is null)
+                continue;
+
+            foreach (var entry in llst.Entries)
             {
-                IArmorGetter armor = masterMod.Armors.AddNew($"AnArmor_{i}");
-                stuff.Add(armor.ToLinkGetter());
-            }
-
-            var stuffSet = stuff.ToHashSet();
-
-            var linkCache = loadOrder.ToImmutableLinkCache();
-
-            Program program = new(loadOrder, linkCache, patchMod, Settings);
-
-            program.AddToLeveledLists(stuff, "Stuff", Program.ArmorLeveledItemsFormLinkList);
-
-            linkCache = loadOrder.ToImmutableLinkCache();
-
-            foreach (var item in Program.ArmorLeveledItemsFormLinkList)
-            {
-                var found = FindAllEntires(item, linkCache);
-
-                Assert.Equal(stuff.Count, found.Count);
-                Assert.True(found.All(i => stuffSet.Contains(i)));
-            }
-        }
-
-        private static HashSet<IFormLinkGetter<IArmorGetter>> FindAllEntires(IFormLinkGetter<ILeveledItemGetter> llstLink, Mutagen.Bethesda.Plugins.Cache.Internals.Implementations.ImmutableLoadOrderLinkCache<ISkyrimMod, ISkyrimModGetter> linkCache)
-        {
-            Stack<IFormLinkGetter<ILeveledItemGetter>> stack = new();
-            HashSet<IFormLinkGetter<IArmorGetter>> found = new();
-            HashSet<IFormLinkGetter<ILeveledItemGetter>> seen = new();
-
-            stack.Push(llstLink);
-            seen.Add(llstLink);
-
-            while (stack.Count > 0)
-            {
-                llstLink = stack.Pop();
-                var llst = llstLink.Resolve(linkCache);
-
-                if (llst.Entries is null)
+                if (entry.Data?.Reference?.IsNull != false)
                     continue;
-
-                foreach (var entry in llst.Entries)
-                {
-                    if (entry.Data?.Reference?.IsNull != false)
-                        continue;
-                    if (entry.Data.Reference.TryResolve<IArmorGetter>(linkCache, out var armor))
-                        found.Add(armor.ToLinkGetter());
-                    else
-                        if (entry.Data.Reference.TryResolve<ILeveledItemGetter>(linkCache, out var llst2))
-                        if (seen.Add(llst2.ToLinkGetter()))
-                            stack.Push(llst2.ToLinkGetter());
-                }
+                if (entry.Data.Reference.TryResolve<IArmorGetter>(linkCache, out var armor))
+                    found.Add(armor.ToLinkGetter());
+                else
+                    if (entry.Data.Reference.TryResolve<ILeveledItemGetter>(linkCache, out var llst2) && seen.Add(llst2.ToLinkGetter()))
+                        stack.Push(llst2.ToLinkGetter());
             }
-
-            return found;
         }
 
+        return found;
     }
 
 }

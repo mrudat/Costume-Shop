@@ -2,101 +2,143 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Noggog;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace CostumeShop
+namespace CostumeShop;
+
+public partial class Program
 {
-    public partial class Program
+    public void AddToLeveledLists(
+        List<IFormLinkGetter<IArmorGetter>> newArmorLinkList,
+        string LeveledListBaseEditorID,
+        FrozenSet<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
     {
-        public void AddToLeveledLists(List<IFormLinkGetter<IArmorGetter>> newArmorLinkList, string LeveledListBaseEditorID, IList<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList)
+        if (newArmorLinkList.Count == 0)
+            return;
+
+        var leveledItems = PatchMod.LeveledItems;
+
+        ILeveledItem newLeveledItems = leveledItems.AddNew(LeveledListBaseEditorID);
+
+        AddToExistingLeveledLists(leveledItems, targetLeveledItemsFormLinkList, newLeveledItems);
+
+        newLeveledItems.Entries = new();
+
+        newLeveledItems.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
+
+        IList<IFormLinkGetter<IItemGetter>> tempItemLinkList = newArmorLinkList.Select(link => (IFormLinkGetter<IItemGetter>)link).ToList();
+
+        int subListIndex = 0;
+
+        while (tempItemLinkList.Count > MAXIMUM_ITEMS_IN_A_LEVELED_LIST)
         {
-            if (newArmorLinkList.Count == 0)
-                return;
+            var oldSubListLinkList = tempItemLinkList;
+            tempItemLinkList = new List<IFormLinkGetter<IItemGetter>>();
 
-            static void AddEntry(ExtendedList<LeveledItemEntry> entries, IFormLinkGetter<IItemGetter> newCostumeLink)
-            {
-                LeveledItemEntryData leveledItemEntryData = new()
-                {
-                    Count = 1,
-                    Level = 1
-                };
-                leveledItemEntryData.Reference.SetTo(newCostumeLink);
-                entries.Add(new()
-                {
-                    Data = leveledItemEntryData
-                });
-            }
-
-            var leveledItems = PatchMod.LeveledItems;
-
-            LeveledItem newLeveledItems = leveledItems.AddNew(LeveledListBaseEditorID);
-
-            foreach (var targetLeveledItemsFormLink in targetLeveledItemsFormLinkList)
-                (leveledItems.GetOrAddAsOverride(targetLeveledItemsFormLink.Resolve(LinkCache)).Entries ??= new()).Add(new()
-                {
-                    Data = new()
-                    {
-                        Count = settings.Value.LeveledListMultipilier,
-                        Level = 1,
-                        Reference = newLeveledItems.ToLink(),
-                    }
-                });
-
-            newLeveledItems.Entries = new();
-
-            newLeveledItems.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
-
-            if (newArmorLinkList.Count > 255)
-            {
-                int subListCounter = 0;
-
-                List<IFormLinkGetter<IItemGetter>> subLists = new();
-
-                void AddThingsToThing(IEnumerable<IFormLinkGetter<IItemGetter>> subList)
-                {
-                    LeveledItem newSubList = leveledItems.AddNew(LeveledListBaseEditorID + "_" + subListCounter++);
-
-                    subLists.Add(newSubList.ToLink());
-
-                    newSubList.Entries = new();
-
-                    newSubList.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
-
-                    foreach (var newCostumeLink in subList)
-                        AddEntry(newSubList.Entries, newCostumeLink);
-                }
-
-                foreach (var chunk in newArmorLinkList
-                    .Select((x, i) => (Index: i, Value: x))
-                    .GroupBy(x => x.Index / 255)
-                    .Select(x => x.Select(y => y.Value)))
-                    if ((chunk.Count() + subLists.Count) < 255)
-                        subLists.AddRange(chunk);
-                    else
-                        AddThingsToThing(chunk);
-
-                while (subLists.Count > 255)
-                {
-                    var oldSubLists = subLists;
-                    subLists = new();
-
-                    foreach (var chunk in oldSubLists
-                        .Select((x, i) => (Index: i, Value: x))
-                        .GroupBy(x => x.Index / 255)
-                        .Select(x => x.Select(y => y.Value)))
-                        if ((chunk.Count() + subLists.Count) < 255)
-                            subLists.AddRange(chunk);
-                        else
-                            AddThingsToThing(chunk);
-                }
-
-                foreach (var subList in subLists)
-                    AddEntry(newLeveledItems.Entries, subList);
-            }
-            else
-                foreach (var newCostumeLink in newArmorLinkList)
-                    AddEntry(newLeveledItems.Entries, newCostumeLink);
+            CreateNewSublistsFromItems(oldSubListLinkList, LeveledListBaseEditorID, leveledItems, ref subListIndex, tempItemLinkList);
         }
+
+        foreach (var itemLink in tempItemLinkList)
+            AddLeveledItemEntry(newLeveledItems.Entries, itemLink);
+    }
+
+    private void AddToExistingLeveledLists(
+        SkyrimGroup<LeveledItem> leveledItems,
+        FrozenSet<IFormLinkGetter<ILeveledItemGetter>> targetLeveledItemsFormLinkList,
+        ILeveledItem newLeveledItems)
+    {
+        LeveledItemEntry item = new()
+        {
+            Data = new()
+            {
+                Count = settings.Value.LeveledListMultiplier,
+                Level = 1,
+                Reference = newLeveledItems.ToLink(),
+            }
+        };
+
+        foreach (var targetLeveledItemsFormLink in targetLeveledItemsFormLinkList)
+        {
+            AddToExistingLeveledList(leveledItems, targetLeveledItemsFormLink, item);
+        }
+    }
+
+    private void AddToExistingLeveledList(
+        SkyrimGroup<LeveledItem> leveledItems,
+        IFormLinkGetter<ILeveledItemGetter> targetLeveledItemsFormLink,
+        LeveledItemEntry item)
+    {
+        ILeveledItem targetLeveledItem = leveledItems.GetOrAddAsOverride(targetLeveledItemsFormLink.Resolve(LinkCache));
+        targetLeveledItem.Entries ??= new();
+        targetLeveledItem.Entries.Add(item);
+    }
+
+    const int MAXIMUM_ITEMS_IN_A_LEVELED_LIST = 255;
+
+    private static void CreateNewSublistsFromItems(
+        IList<IFormLinkGetter<IItemGetter>> itemLinkList,
+        string LeveledListBaseEditorID,
+        SkyrimGroup<LeveledItem> leveledItems,
+        ref int subListIndex,
+        IList<IFormLinkGetter<IItemGetter>> subLists)
+    {
+        var chunks = itemLinkList
+                    .Select((itemLink, index) => (Index: index, ItemLink: itemLink))
+                    .GroupBy(x => x.Index / MAXIMUM_ITEMS_IN_A_LEVELED_LIST)
+                    .Select(group => group.Select(y => y.ItemLink).ToList())
+                    .ToList();
+
+        foreach (var chunk in chunks.SkipLast(1))
+        {
+            CreateNewSublistFromItems(chunk, LeveledListBaseEditorID, leveledItems, ref subListIndex, subLists);
+        }
+
+        var lastChunk = chunks[^1];
+
+        if (EnoughSpaceToAddChunkToSublists(subLists, lastChunk))
+        {
+            subLists.AddRange(lastChunk);
+        }
+        else
+        {
+            CreateNewSublistFromItems(lastChunk, LeveledListBaseEditorID, leveledItems, ref subListIndex, subLists);
+        }
+    }
+
+    private static bool EnoughSpaceToAddChunkToSublists(IList<IFormLinkGetter<IItemGetter>> subLists, IList<IFormLinkGetter<IItemGetter>> chunk) => (chunk.Count + subLists.Count) < MAXIMUM_ITEMS_IN_A_LEVELED_LIST;
+
+    private static void CreateNewSublistFromItems(
+        IList<IFormLinkGetter<IItemGetter>> itemLinkList,
+        string leveledListBaseEditorID,
+        SkyrimGroup<LeveledItem> leveledItems,
+        ref int subListIndex,
+        IList<IFormLinkGetter<IItemGetter>> subLists)
+    {
+        ILeveledItem newSubList = leveledItems.AddNew(leveledListBaseEditorID + "_" + subListIndex++);
+
+        subLists.Add(newSubList.ToLink());
+
+        newSubList.Entries = new();
+
+        newSubList.Flags = LeveledItem.Flag.CalculateForEachItemInCount | LeveledItem.Flag.CalculateFromAllLevelsLessThanOrEqualPlayer;
+
+        foreach (var itemLink in itemLinkList)
+            AddLeveledItemEntry(newSubList.Entries, itemLink);
+    }
+
+    private static void AddLeveledItemEntry(ExtendedList<LeveledItemEntry> entries, IFormLinkGetter<IItemGetter> itemLink)
+    {
+        LeveledItemEntryData leveledItemEntryData = new()
+        {
+            Count = 1,
+            Level = 1
+        };
+        leveledItemEntryData.Reference.SetTo(itemLink);
+        entries.Add(new()
+        {
+            Data = leveledItemEntryData
+        });
     }
 }

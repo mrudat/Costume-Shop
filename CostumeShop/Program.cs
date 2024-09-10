@@ -7,235 +7,231 @@ using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
 using Noggog;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace CostumeShop
+namespace CostumeShop;
+
+public partial class Program
 {
-    public partial class Program
+    private readonly ILoadOrder<IModListing<ISkyrimModGetter>> LoadOrder;
+    private readonly ILinkCache<ISkyrimMod, ISkyrimModGetter> LinkCache;
+    private readonly ISkyrimMod PatchMod;
+
+    static Lazy<Settings> Settings = null!;
+    private readonly Lazy<Settings> settings;
+
+    private readonly List<IFormLinkGetter<IArmorGetter>> NewArmorLinks = new();
+    private readonly List<IFormLinkGetter<IArmorGetter>> NewCostumeLinks = new();
+
+    private readonly Lazy<IFormLinkGetter<IKeywordGetter>> replicaKeyword;
+    private readonly Lazy<IFormLinkGetter<IKeywordGetter>> costumeKeyword;
+
+    private readonly Stack<ArmorAppearanceRecord> ArmorsWithTheSameAppearance = new();
+
+    private readonly static Armor.TranslationMask ArmorToClothesCopyMask = new(true)
     {
-        private readonly ILoadOrder<IModListing<ISkyrimModGetter>> LoadOrder;
-        private readonly ILinkCache<ISkyrimMod, ISkyrimModGetter> LinkCache;
-        private readonly ISkyrimMod PatchMod;
+        EditorID = false,
+        ArmorRating = false,
+        VirtualMachineAdapter = false
+    };
 
-        static Lazy<Settings> Settings = null!;
-        private readonly Lazy<Settings> settings;
+    public readonly static FrozenSet<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
+        Skyrim.LeveledItem.LItemClothesAll,
+        Skyrim.LeveledItem.LItemMiscVendorClothing75,
+        Skyrim.LeveledItem.LItemFineClothes50
+    }.ToFrozenSet();
 
-        private readonly List<IFormLinkGetter<IArmorGetter>> NewArmorLinks = new();
-        private readonly List<IFormLinkGetter<IArmorGetter>> NewCostumeLinks = new();
+    public readonly static FrozenSet<IFormLinkGetter<ILeveledItemGetter>> ArmorLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
+        Skyrim.LeveledItem.LItemBlacksmithArmor75
+    }.ToFrozenSet();
 
-        private readonly Lazy<IFormLinkGetter<IKeywordGetter>> replicaKeyword;
-        private readonly Lazy<IFormLinkGetter<IKeywordGetter>> costumeKeyword;
+    private readonly static FrozenDictionary<IFormLinkGetter<IKeywordGetter>, IFormLinkGetter<IKeywordGetter>> ArmorKeywordsToClothesKeywords = new Dictionary<IFormLinkGetter<IKeywordGetter>, IFormLinkGetter<IKeywordGetter>>()
+    {
+        { Skyrim.Keyword.ArmorBoots, Skyrim.Keyword.ClothingFeet },
+        { Skyrim.Keyword.ArmorCuirass, Skyrim.Keyword.ClothingBody },
+        { Skyrim.Keyword.ArmorGauntlets, Skyrim.Keyword.ClothingHands },
+        { Skyrim.Keyword.ArmorHelmet, Skyrim.Keyword.ClothingHead },
+        { Skyrim.Keyword.VendorItemArmor, Skyrim.Keyword.VendorItemClothing },
+        { Skyrim.Keyword.ArmorHeavy, Skyrim.Keyword.ArmorClothing },
+        { Skyrim.Keyword.ArmorLight, Skyrim.Keyword.ArmorClothing },
+    }.ToFrozenDictionary();
 
-        private readonly Stack<ArmorAppearanceRecord> ArmorsWithTheSameAppearance = new();
+    private readonly static FrozenSet<IFormLinkGetter<IKeywordGetter>> KeywordsForbiddenOnReplicas = new List<IFormLinkGetter<IKeywordGetter>>(){
+        Skyrim.Keyword.MagicDisallowEnchanting,
+        Skyrim.Keyword.VendorNoSale
+    }.ToFrozenSet();
 
-        private readonly static Armor.TranslationMask ArmorToClothesCopyMask = new(true)
-        {
-            EditorID = false,
-            ArmorRating = false,
-            VirtualMachineAdapter = false
-        };
+    private readonly static FrozenSet<IFormLinkGetter<IKeywordGetter>> KeywordsForbiddenOnCostumes = new List<IFormLinkGetter<IKeywordGetter>>(){
+        Skyrim.Keyword.PerkFistsDaedric,
+        Skyrim.Keyword.PerkFistsDragonplate,
+        Skyrim.Keyword.PerkFistsDwarven,
+        Skyrim.Keyword.PerkFistsEbony,
+        Skyrim.Keyword.PerkFistsIron,
+        Skyrim.Keyword.PerkFistsOrcish,
+        Skyrim.Keyword.PerkFistsSteel,
+        Skyrim.Keyword.PerkFistsSteelPlate,
+    }.ToFrozenSet();
 
-        public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ClothesLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
-            Skyrim.LeveledItem.LItemClothesAll,
-            Skyrim.LeveledItem.LItemMiscVendorClothing75,
-            Skyrim.LeveledItem.LItemFineClothes50
-        }.ToImmutableList();
-
-        public readonly static ImmutableList<IFormLinkGetter<ILeveledItemGetter>> ArmorLeveledItemsFormLinkList = new List<IFormLinkGetter<ILeveledItemGetter>>() {
-            Skyrim.LeveledItem.LItemBlacksmithArmor75
-        }.ToImmutableList();
-
-        private readonly static ImmutableDictionary<IFormLinkGetter<IKeywordGetter>, IFormLinkGetter<IKeywordGetter>> ArmorKeywordsToClothesKeywords = new Dictionary<IFormLinkGetter<IKeywordGetter>, IFormLinkGetter<IKeywordGetter>>()
-        {
-            { Skyrim.Keyword.ArmorBoots, Skyrim.Keyword.ClothingFeet },
-            { Skyrim.Keyword.ArmorCuirass, Skyrim.Keyword.ClothingBody },
-            { Skyrim.Keyword.ArmorGauntlets, Skyrim.Keyword.ClothingHands },
-            { Skyrim.Keyword.ArmorHelmet, Skyrim.Keyword.ClothingHead },
-            { Skyrim.Keyword.VendorItemArmor, Skyrim.Keyword.VendorItemClothing },
-            { Skyrim.Keyword.ArmorHeavy, Skyrim.Keyword.ArmorClothing },
-            { Skyrim.Keyword.ArmorLight, Skyrim.Keyword.ArmorClothing },
-        }.ToImmutableDictionary();
-
-        private readonly static ImmutableList<IFormLinkGetter<IKeywordGetter>> KeywordsForbiddenOnReplicas = new List<IFormLinkGetter<IKeywordGetter>>(){
-            Skyrim.Keyword.MagicDisallowEnchanting,
-            Skyrim.Keyword.VendorNoSale
-        }.ToImmutableList();
-
-        private readonly static ImmutableList<IFormLinkGetter<IKeywordGetter>> KeywordsForbiddenOnCostumes = new List<IFormLinkGetter<IKeywordGetter>>(){
-            Skyrim.Keyword.PerkFistsDaedric,
-            Skyrim.Keyword.PerkFistsDragonplate,
-            Skyrim.Keyword.PerkFistsDwarven,
-            Skyrim.Keyword.PerkFistsEbony,
-            Skyrim.Keyword.PerkFistsIron,
-            Skyrim.Keyword.PerkFistsOrcish,
-            Skyrim.Keyword.PerkFistsSteel,
-            Skyrim.Keyword.PerkFistsSteelPlate,
-        }.ToImmutableList();
-
-        public Program(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) : this(state.LoadOrder, state.LinkCache, state.PatchMod, Settings) { }
-
-        public static async Task<int> Main(string[] args)
-        {
-            return await SynthesisPipeline.Instance
-                .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch)
-                .SetTypicalOpen(GameRelease.SkyrimSE, "CostumeShop.esp")
-                .SetAutogeneratedSettings("Settings", "settings.json", out Settings)
-                .Run(args);
-        }
-
-        public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-            new Program(state.LoadOrder, state.LinkCache, state.PatchMod, Settings).Run();
-        }
-
-        public Program(ILoadOrder<IModListing<ISkyrimModGetter>> loadOrder, ILinkCache<ISkyrimMod, ISkyrimModGetter> linkCache, ISkyrimMod patchMod, Lazy<Settings> settings)
-        {
-            LoadOrder = loadOrder;
-            LinkCache = linkCache;
-            PatchMod = patchMod;
-            this.settings = settings;
-
-            replicaKeyword = new(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));
-            costumeKeyword = new(() => FindOrMakeKeyword("CostumeShop_CostumeKeyword"));
-        }
-
-        public void Run()
-        {
-            ClassifyArmorByAppearance();
-
-            BuildMissingArmor();
-
-            if (NewCostumeLinks.Count > 0 || NewArmorLinks.Count > 0)
-            {
-                Console.WriteLine("Adding new items to LeveledLists...");
-
-                AddToLeveledLists(NewCostumeLinks, "LItemMiscVendorClothing_CostumeShop", ClothesLeveledItemsFormLinkList);
-
-                AddToLeveledLists(NewArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
-            }
-        }
-
-        private void ClassifyArmorByAppearance()
-        {
-            Console.WriteLine("Classifying armor...");
-
-            var timer = new Timer(_ => Console.WriteLine($"Identified {ArmorsWithTheSameAppearance.Count} distinct armor appearances..."), null, 2000, 2000);
-
-            Dictionary<IFormLinkGetter<IArmorAddonGetter>, List<ArmorAppearanceRecord>> armorAppearanceByArmature = new();
-
-            foreach (var armor in LoadOrder
-                .PriorityOrder
-                .Armor()
-                .WinningOverrides()
-                .Where(i => i.BodyTemplate is not null)
-                .Where(i => i.Race.Equals(Skyrim.Race.DefaultRace))
-                .Where(i => i.Armature.Count > 0))
-            {
-                var armature = armor.Armature;
-
-                var orderedArma = armature.Count == 1 ? armature : armature
-                    .OrderBy(arma => arma.FormKey.ModKey.Name)
-                    .ThenBy(arma => arma.FormKey.ID)
-                    .ToImmutableList();
-
-                var firstArma = orderedArma[0];
-
-                ArmorAppearanceRecord? appearanceRecord = null;
-
-                if (armorAppearanceByArmature.TryGetValue(firstArma, out var appearanceRecords))
-                    appearanceRecord = appearanceRecords.FirstOrDefault(item => orderedArma.SequenceEqual(item.armatures));
-
-                if (appearanceRecord is null)
-                {
-                    appearanceRecord = new ArmorAppearanceRecord(orderedArma);
-                    ArmorsWithTheSameAppearance.Push(appearanceRecord);
-                    armorAppearanceByArmature.GetOrAdd(firstArma).Add(appearanceRecord);
-                }
-
-                appearanceRecord.Add(armor);
-            }
-
-            timer.Change(0, Timeout.Infinite);
-        }
-
-        private void BuildMissingArmor()
-        {
-            Console.WriteLine("Building missing armor...");
-
-            var timer = new Timer(_ => Console.WriteLine($"Created {NewArmorLinks.Count} armor templates, and {NewCostumeLinks.Count} costumes..."), null, 2000, 2000);
-
-            while (ArmorsWithTheSameAppearance.Count > 0)
-            {
-                var armorAppearance = ArmorsWithTheSameAppearance.Pop();
-
-                armorAppearance.GetClassified(out var enchantedArmors, out var armors, out var enchantedClothes, out var clothes);
-
-                if (enchantedArmors is not null)
-                {
-                    if (armors is null)
-                        armors = CreateUnenchantedArmor(enchantedArmors);
-                    else
-                    {
-                        EnsureAvailable(armors);
-                        SetTemplateArmor(enchantedArmors, armors);
-                    }
-                }
-
-                if (enchantedClothes is not null)
-                {
-                    if (clothes is null)
-                        clothes = CreateUnenchantedArmor(enchantedClothes);
-                    else
-                    {
-                        EnsureAvailable(clothes);
-                        SetTemplateArmor(enchantedClothes, clothes);
-                    }
-                }
-
-                if (armors is not null)
-                {
-                    if (clothes is null)
-                        clothes = CreateCostumeArmor(armors);
-                    else
-                        EnsureAvailable(clothes);
-                }
-            }
-
-            timer.Change(0, Timeout.Infinite);
-        }
-
-        public void EnsureAvailable(HashSet<IArmorGetter> armors)
-        {
-            if (armors.Any(armor => !armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable)))
-                return;
-
-            foreach (var armor in armors)
-            {
-                PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
-                RegisterCostumeLinks(armor);
-            }
-        }
-
-        private void RegisterCostumeLinks(IArmorGetter armor) => (armor.BodyTemplate!.ArmorType switch
-        {
-            ArmorType.Clothing => NewCostumeLinks,
-            _ => NewArmorLinks,
-        }).Add(armor.ToLink());
-
-        public static ArmorClassification Classify(IArmorGetter armor) => armor.BodyTemplate!.ArmorType switch
-        {
-            ArmorType.Clothing => armor.ObjectEffect.IsNull ? ArmorClassification.Clothing : ArmorClassification.EnchantedClothing,
-            _ => armor.ObjectEffect.IsNull ? ArmorClassification.Armor : ArmorClassification.EnchantedArmor,
-        };
-
-        public IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
-            LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
-                ? keyword
-                : PatchMod.Keywords.AddNew(EditorID)
-            ).ToLink();
+    public static async Task<int> Main(string[] args)
+    {
+        return await SynthesisPipeline.Instance
+            .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch)
+            .SetTypicalOpen(GameRelease.SkyrimSE, "CostumeShop.esp")
+            .SetAutogeneratedSettings("Settings", "settings.json", out Settings)
+            .Run(args);
     }
+
+    public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) => new Program(state.LoadOrder, state.LinkCache, state.PatchMod, Settings).Run();
+
+    public Program(IPatcherState<ISkyrimMod, ISkyrimModGetter> state) : this(state.LoadOrder, state.LinkCache, state.PatchMod, Settings) { }
+
+    public Program(ILoadOrder<IModListing<ISkyrimModGetter>> loadOrder, ILinkCache<ISkyrimMod, ISkyrimModGetter> linkCache, ISkyrimMod patchMod, Lazy<Settings> settings)
+    {
+        LoadOrder = loadOrder;
+        LinkCache = linkCache;
+        PatchMod = patchMod;
+        this.settings = settings;
+
+        replicaKeyword = new(() => FindOrMakeKeyword("CostumeShop_ReplicaKeyword"));
+        costumeKeyword = new(() => FindOrMakeKeyword("CostumeShop_CostumeKeyword"));
+    }
+
+    public void Run()
+    {
+        ClassifyArmorByAppearance();
+
+        BuildMissingArmor();
+
+        if (NewCostumeLinks.Count > 0 || NewArmorLinks.Count > 0)
+        {
+            Console.WriteLine("Adding new items to LeveledLists...");
+
+            AddToLeveledLists(NewCostumeLinks, "LItemMiscVendorClothing_CostumeShop", ClothesLeveledItemsFormLinkList);
+
+            AddToLeveledLists(NewArmorLinks, "LItemMiscVendorArmor_CostumeShop", ArmorLeveledItemsFormLinkList);
+        }
+    }
+
+    private void ClassifyArmorByAppearance()
+    {
+        Console.WriteLine("Classifying armor...");
+
+        var timer = new Timer(_ => Console.WriteLine($"Identified {ArmorsWithTheSameAppearance.Count} distinct armor appearances..."), null, 2000, 2000);
+
+        Dictionary<IFormLinkGetter<IArmorAddonGetter>, List<ArmorAppearanceRecord>> armorAppearanceByArmature = new();
+
+        foreach (var armor in LoadOrder
+            .PriorityOrder
+            .Armor()
+            .WinningOverrides()
+            .Where(i => i.BodyTemplate is not null)
+            .Where(i => i.Race.Equals(Skyrim.Race.DefaultRace))
+            .Where(i => i.Armature.Count > 0))
+        {
+            var armature = armor.Armature;
+
+            var orderedArma = armature.Count == 1 ? armature : armature
+                .OrderBy(arma => arma.FormKey.ModKey.Name)
+                .ThenBy(arma => arma.FormKey.ID)
+                .ToList().AsReadOnly();
+
+            var firstArma = orderedArma[0];
+
+            ArmorAppearanceRecord? appearanceRecord = null;
+
+            if (armorAppearanceByArmature.TryGetValue(firstArma, out var appearanceRecords))
+                appearanceRecord = appearanceRecords.Find(item => orderedArma.SequenceEqual(item.armatures));
+
+            if (appearanceRecord is null)
+            {
+                appearanceRecord = new ArmorAppearanceRecord(orderedArma);
+                ArmorsWithTheSameAppearance.Push(appearanceRecord);
+                armorAppearanceByArmature.GetOrAdd(firstArma).Add(appearanceRecord);
+            }
+
+            appearanceRecord.Add(armor);
+        }
+
+        timer.Change(0, Timeout.Infinite);
+    }
+
+    private void BuildMissingArmor()
+    {
+        Console.WriteLine("Building missing armor...");
+
+        var timer = new Timer(_ => Console.WriteLine($"Created {NewArmorLinks.Count} armor templates, and {NewCostumeLinks.Count} costumes..."), null, 2000, 2000);
+
+        while (ArmorsWithTheSameAppearance.Count > 0)
+        {
+            var armorAppearance = ArmorsWithTheSameAppearance.Pop();
+
+            armorAppearance.GetClassified(out var enchantedArmors, out var armors, out var enchantedClothes, out var clothes);
+
+            if (enchantedArmors is not null)
+            {
+                if (armors is null)
+                    armors = CreateUnenchantedArmor(enchantedArmors);
+                else
+                {
+                    EnsureAvailable(armors);
+                    SetTemplateArmor(enchantedArmors, armors);
+                }
+            }
+
+            if (enchantedClothes is not null)
+            {
+                if (clothes is null)
+                    clothes = CreateUnenchantedArmor(enchantedClothes);
+                else
+                {
+                    EnsureAvailable(clothes);
+                    SetTemplateArmor(enchantedClothes, clothes);
+                }
+            }
+
+            if (armors is not null)
+            {
+                if (clothes is null)
+                    clothes = CreateCostumeArmor(armors);
+                else
+                    EnsureAvailable(clothes);
+            }
+        }
+
+        timer.Change(0, Timeout.Infinite);
+    }
+
+    public void EnsureAvailable(HashSet<IArmorGetter> armors)
+    {
+        if (armors.Any(armor => !armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable)))
+            return;
+
+        foreach (var armor in armors)
+        {
+            PatchMod.Armors.GetOrAddAsOverride(armor).MajorFlags &= ~Armor.MajorFlag.NonPlayable;
+            RegisterCostumeLinks(armor);
+        }
+    }
+
+    private void RegisterCostumeLinks(IArmorGetter armor) => (armor.BodyTemplate!.ArmorType switch
+    {
+        ArmorType.Clothing => NewCostumeLinks,
+        _ => NewArmorLinks,
+    }).Add(armor.ToLink());
+
+    public static ArmorClassification Classify(IArmorGetter armor) => armor.BodyTemplate!.ArmorType switch
+    {
+        ArmorType.Clothing => armor.ObjectEffect.IsNull ? ArmorClassification.Clothing : ArmorClassification.EnchantedClothing,
+        _ => armor.ObjectEffect.IsNull ? ArmorClassification.Armor : ArmorClassification.EnchantedArmor,
+    };
+
+    public IFormLinkGetter<IKeywordGetter> FindOrMakeKeyword(string EditorID) => (
+        LinkCache.TryResolve<IKeywordGetter>(EditorID, out var keyword)
+            ? keyword
+            : PatchMod.Keywords.AddNew(EditorID)
+        ).ToLink();
 }

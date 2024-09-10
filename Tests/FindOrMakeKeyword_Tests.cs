@@ -3,30 +3,28 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Skyrim;
 using Xunit;
 
-namespace Tests
+namespace Tests;
+
+public class FindOrMakeKeyword_Tests : TestBase
 {
-    public class FindOrMakeKeyword_Tests : TestBase
+    [Theory]
+    [InlineData(true, "Fred")]
+    [InlineData(false, "Fred")]
+    public void TestFindOrMakeKeyword(bool addBefore, string editorID)
     {
-        [Theory]
-        [InlineData(true, "Fred")]
-        [InlineData(false, "Fred")]
-        public void TestFindOrMakeKeyword(bool addBefore, string editorID)
-        {
-            if (addBefore)
-                masterMod.Keywords.AddNew(editorID);
+        if (addBefore)
+            masterMod.Keywords.AddNew(editorID);
 
-            var linkCache = loadOrder.ToImmutableLinkCache();
+        var linkCache = loadOrder.ToImmutableLinkCache();
 
-            Program program = new(loadOrder, linkCache, patchMod, Settings);
+        Program program = new(loadOrder, linkCache, patchMod, Settings);
 
-            program.FindOrMakeKeyword(editorID);
+        program.FindOrMakeKeyword(editorID);
 
-            var afterLinkCache = loadOrder.ToImmutableLinkCache();
+        var afterLinkCache = loadOrder.ToImmutableLinkCache();
 
-            afterLinkCache.TryResolve<IKeywordGetter>(editorID, out var keyword);
+        afterLinkCache.TryResolve<IKeywordGetter>(editorID, out var keyword);
 
-            Assert.NotNull(keyword);
-        }
+        Assert.NotNull(keyword);
     }
-
 }

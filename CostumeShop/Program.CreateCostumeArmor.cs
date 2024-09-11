@@ -1,5 +1,7 @@
+using DynamicData;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
+using Mutagen.Bethesda.Plugins.Records;
 using Mutagen.Bethesda.Skyrim;
 using Noggog;
 using System;
@@ -10,66 +12,99 @@ namespace CostumeShop;
 
 public partial class Program
 {
-    private HashSet<IArmorGetter> CreateCostumeArmor(HashSet<IArmorGetter> armors)
+    private void CreateCostumeArmor(HashSet<IArmorGetter> armors)
     {
-        var armor = armors.OrderBy(i => i.Armature.Count).First();
+        var armor = GetCheapestArmor(armors);
+        var foo = armor.Duplicate(armor.FormKey);
+        var newCostumeArmor = PatchMod.Armors.AddNew("CostumeShop_" + armor.EditorID);
 
-        var newArmor = PatchMod.Armors.AddNew("CostumeShop_" + armor.EditorID);
+        CopyArmorData(newCostumeArmor, armor, ArmorToClothesCopyMask);
 
-        newArmor.DeepCopyIn(armor, out var copyError, ArmorToClothesCopyMask);
-        if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
+        MarkCopiedArmorAsClothing(newCostumeArmor);
 
+        UpdateNameForCostume(newCostumeArmor);
+
+        newCostumeArmor.Keywords ??= new(); // Ensure keywords collection exists
+
+        UpdateKeywordsForCostume(newCostumeArmor);
+
+        AddRequiredKeywords(newCostumeArmor);
+        UpdateStatsForCostume(newCostumeArmor);
+        RegisterCostumeLinks(newCostumeArmor);
+    }
+
+    private static void MarkCopiedArmorAsClothing(Armor newArmor)
+    {
         newArmor.BodyTemplate!.ArmorType = ArmorType.Clothing;
+    }
 
-        if (newArmor.Name is not null)
-        {
-            // TODO there's got to be a better way.
-            var name = newArmor.Name.String;
-            if (name?.EndsWith(settings.Value.ReplicaSuffix) == true)
-                name = name[..^settings.Value.ReplicaSuffix.Length];
-            newArmor.Name.String = name + settings.Value.CostumeSuffix;
-        }
+    private static IArmorGetter GetCheapestArmor(HashSet<IArmorGetter> armors) => armors.OrderBy(i => i.Armature.Count).First();
 
-        var keywords = newArmor.Keywords ??= new();
+    private static void CopyArmorData(IArmor target, IArmorGetter source, SkyrimMajorRecord.TranslationMask copyMask)
+    {
+        target.DeepCopyIn(source, out var copyError, copyMask);
+        if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
+    }
 
+    private void UpdateNameForCostume(IArmor armor)
+    {
+        if (armor.Name is null)
+            return;
+
+        var name = armor.Name.String;
+
+        if (name?.EndsWith(settings.Value.ReplicaSuffix) == true)
+            name = name[..^settings.Value.ReplicaSuffix.Length];
+
+        armor.Name.String = name + settings.Value.CostumeSuffix;
+    }
+
+    private void UpdateKeywordsForCostume(IArmor armor)
+    {
+        var keywords = armor.Keywords ??= new();
+
+        // if true increases warmth one step from Cold -> normal (no keyword) -> Warm
+        var makeWarmer = settings.Value.MakeCostumeArmorWarmer;
+
+        // iterate in reverse order as it makes removing entries faster.
         for (int i = keywords.Count - 1; i >= 0; i--)
         {
             var keyword = keywords[i];
             if (ArmorKeywordsToClothesKeywords.TryGetValue(keyword, out var newKeyword))
                 keywords[i] = newKeyword;
-
-            if (KeywordsForbiddenOnCostumes.Contains(keyword))
+            else if (KeywordsForbiddenOnCostumes.Contains(keyword))
                 keywords.RemoveAt(i);
+            else if (makeWarmer)
+                if (keyword.Equals(Update.Keyword.Survival_ArmorCold))
+                {
+                    // Cold -> normal
+                    keywords.RemoveAt(i);
+                    makeWarmer = false;
+                }
+                else if (keyword.Equals(Update.Keyword.Survival_ArmorWarm))
+                    makeWarmer = false;
         }
 
-        // The new costume armor contains less metal and more padding, upgrade it by one level of warmth.
-        if(settings.Value.MakeCostumeArmorWarmer)
-            MakeWarmer(newArmor);
+        // normal -> Warm
+        if (makeWarmer)
+            keywords.Add(Update.Keyword.Survival_ArmorWarm);
+    }
+
+    private void AddRequiredKeywords(IArmor armor)
+    {
+        var keywords = armor.Keywords ??= new();
 
         // Add rich keyword; cosplay is an expensive hobby.
         keywords.Add(Skyrim.Keyword.ClothingRich);
 
-        // Remove poor keyword, if any.
-        keywords.Remove(Skyrim.Keyword.ClothingPoor);
-
+        // Add the specific costume keyword
         keywords.Add(costumeKeyword.Value);
-
-        newArmor.ArmorRating = 0;
-
-        newArmor.Weight /= settings.Value.CostumeArmorWeightDivisor;
-        newArmor.Value = (uint)(newArmor.Value / settings.Value.CostumeArmorPriceDivisor);
-
-        RegisterCostumeLinks(newArmor);
-        return new HashSet<IArmorGetter>() { newArmor };
     }
 
-    private static void MakeWarmer(Armor armor)
+    private void UpdateStatsForCostume(IArmor armor)
     {
-        var keywords = armor.Keywords!;
-        if (keywords.Contains(Update.Keyword.Survival_ArmorCold))
-            keywords.Remove(Update.Keyword.Survival_ArmorCold);
-        else
-            if (!keywords.Contains(Update.Keyword.Survival_ArmorWarm))
-                keywords.Add(Update.Keyword.Survival_ArmorWarm);
+        armor.ArmorRating = 0;
+        armor.Weight /= settings.Value.CostumeArmorWeightDivisor;
+        armor.Value = (uint)(armor.Value / settings.Value.CostumeArmorPriceDivisor);
     }
 }

@@ -21,14 +21,13 @@ public partial class Program
 
     private HashSet<IArmorGetter> CreateUnenchantedArmor(HashSet<IArmorGetter> enchantedArmors)
     {
-        var armor = enchantedArmors.OrderBy(i => i.Armature.Count).First();
+        IArmorGetter armor = SelectArmorWithMostComponents(enchantedArmors);
 
         var newArmorEditorID = "CostumeShop_" + armor.EditorID;
 
         var newArmor = PatchMod.Armors.AddNew(newArmorEditorID);
 
-        newArmor.DeepCopyIn(armor, out var copyError, ArmorToTemplateCopyMask);
-        if (copyError.IsInError() && copyError.Overall is Exception e) throw e;
+        CopyArmorData(newArmor, armor, ArmorToTemplateCopyMask);
 
         if (newArmor.Name is not null)
             newArmor.Name.String += settings.Value.ReplicaSuffix;
@@ -37,9 +36,7 @@ public partial class Program
 
         var keywords = newArmor.Keywords ??= new();
 
-        for (int i = keywords.Count - 1; i >= 0; i--)
-            if (KeywordsForbiddenOnReplicas.Contains(keywords[i]))
-                keywords.RemoveAt(i);
+        keywords.RemoveAll(KeywordsForbiddenOnReplicas.Contains);
 
         keywords.Add(replicaKeyword.Value);
 
@@ -47,6 +44,11 @@ public partial class Program
 
         RegisterCostumeLinks(newArmor);
         return new HashSet<IArmorGetter>() { newArmor };
+    }
+
+    private static IArmorGetter SelectArmorWithMostComponents(HashSet<IArmorGetter> enchantedArmors)
+    {
+        return enchantedArmors.OrderBy(i => i.Armature.Count).First();
     }
 
     private void SetTemplateArmor(HashSet<IArmorGetter> enchantedArmors, IArmorGetter armor)

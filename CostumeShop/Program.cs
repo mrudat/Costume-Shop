@@ -74,6 +74,7 @@ public partial class Program
         Skyrim.Keyword.PerkFistsOrcish,
         Skyrim.Keyword.PerkFistsSteel,
         Skyrim.Keyword.PerkFistsSteelPlate,
+        Skyrim.Keyword.ClothingPoor
     }.ToFrozenSet();
 
     public static async Task<int> Main(string[] args)
@@ -102,9 +103,9 @@ public partial class Program
 
     public void Run()
     {
-        ClassifyArmorByAppearance();
+        ClassifyArmorsByAppearance();
 
-        BuildMissingArmor();
+        BuildMissingArmors();
 
         if (NewCostumeLinks.Count > 0 || NewArmorLinks.Count > 0)
         {
@@ -116,7 +117,7 @@ public partial class Program
         }
     }
 
-    private void ClassifyArmorByAppearance()
+    private void ClassifyArmorsByAppearance()
     {
         Console.WriteLine("Classifying armor...");
 
@@ -132,80 +133,87 @@ public partial class Program
             .Where(i => i.Race.Equals(Skyrim.Race.DefaultRace))
             .Where(i => i.Armature.Count > 0))
         {
-            var armature = armor.Armature;
-
-            var orderedArma = armature.Count == 1 ? armature : armature
-                .OrderBy(arma => arma.FormKey.ModKey.Name)
-                .ThenBy(arma => arma.FormKey.ID)
-                .ToList().AsReadOnly();
-
-            var firstArma = orderedArma[0];
-
-            ArmorAppearanceRecord? appearanceRecord = null;
-
-            if (armorAppearanceByArmature.TryGetValue(firstArma, out var appearanceRecords))
-                appearanceRecord = appearanceRecords.Find(item => orderedArma.SequenceEqual(item.armatures));
-
-            if (appearanceRecord is null)
-            {
-                appearanceRecord = new ArmorAppearanceRecord(orderedArma);
-                ArmorsWithTheSameAppearance.Push(appearanceRecord);
-                armorAppearanceByArmature.GetOrAdd(firstArma).Add(appearanceRecord);
-            }
-
-            appearanceRecord.Add(armor);
+            ClassifyArmorByAppearance(armorAppearanceByArmature, armor);
         }
 
         timer.Change(0, Timeout.Infinite);
     }
 
-    private void BuildMissingArmor()
+    private void ClassifyArmorByAppearance(Dictionary<IFormLinkGetter<IArmorAddonGetter>, List<ArmorAppearanceRecord>> armorAppearanceByArmature, IArmorGetter armor)
+    {
+        var armature = armor.Armature;
+
+        var orderedArma = armature.Count == 1 ? armature : armature
+            .OrderBy(arma => arma.FormKey.ModKey.Name)
+            .ThenBy(arma => arma.FormKey.ID)
+            .ToList().AsReadOnly();
+
+        var firstArma = orderedArma[0];
+
+        ArmorAppearanceRecord? appearanceRecord = null;
+
+        if (armorAppearanceByArmature.TryGetValue(firstArma, out var appearanceRecords))
+            appearanceRecord = appearanceRecords.Find(item => orderedArma.SequenceEqual(item.armatures));
+
+        if (appearanceRecord is null)
+        {
+            appearanceRecord = new ArmorAppearanceRecord(orderedArma);
+            ArmorsWithTheSameAppearance.Push(appearanceRecord);
+            armorAppearanceByArmature.GetOrAdd(firstArma).Add(appearanceRecord);
+        }
+
+        appearanceRecord.Add(armor);
+    }
+
+    private void BuildMissingArmors()
     {
         Console.WriteLine("Building missing armor...");
 
         var timer = new Timer(_ => Console.WriteLine($"Created {NewArmorLinks.Count} armor templates, and {NewCostumeLinks.Count} costumes..."), null, 2000, 2000);
 
         while (ArmorsWithTheSameAppearance.Count > 0)
-        {
-            var armorAppearance = ArmorsWithTheSameAppearance.Pop();
-
-            armorAppearance.GetClassified(out var enchantedArmors, out var armors, out var enchantedClothes, out var clothes);
-
-            if (enchantedArmors is not null)
-            {
-                if (armors is null)
-                    armors = CreateUnenchantedArmor(enchantedArmors);
-                else
-                {
-                    EnsureAvailable(armors);
-                    SetTemplateArmor(enchantedArmors, armors);
-                }
-            }
-
-            if (enchantedClothes is not null)
-            {
-                if (clothes is null)
-                    clothes = CreateUnenchantedArmor(enchantedClothes);
-                else
-                {
-                    EnsureAvailable(clothes);
-                    SetTemplateArmor(enchantedClothes, clothes);
-                }
-            }
-
-            if (armors is not null)
-            {
-                if (clothes is null)
-                    clothes = CreateCostumeArmor(armors);
-                else
-                    EnsureAvailable(clothes);
-            }
-        }
+            BuildMissingArmor(ArmorsWithTheSameAppearance.Pop());
 
         timer.Change(0, Timeout.Infinite);
     }
 
-    public void EnsureAvailable(HashSet<IArmorGetter> armors)
+    private void BuildMissingArmor(ArmorAppearanceRecord armorAppearance)
+    {
+        armorAppearance.GetClassified(out var enchantedArmors, out var armors, out var enchantedClothes, out var clothes);
+
+        CreateOrMakeAvailableUnenchantedArmor(enchantedArmors, ref armors);
+
+        CreateOrMakeAvailableUnenchantedArmor(enchantedClothes, ref clothes);
+
+        CreateOrMakeAvailableCostumeArmor(armors, clothes);
+    }
+
+    private void CreateOrMakeAvailableUnenchantedArmor(HashSet<IArmorGetter>? enchantedArmors, ref HashSet<IArmorGetter>? unenchantedArmors)
+    {
+        if (enchantedArmors is null)
+            return;
+
+        if (unenchantedArmors is null)
+            unenchantedArmors = CreateUnenchantedArmor(enchantedArmors);
+        else
+        {
+            EnsurePlayable(unenchantedArmors);
+            SetTemplateArmor(enchantedArmors, unenchantedArmors);
+        }
+    }
+
+    private void CreateOrMakeAvailableCostumeArmor(HashSet<IArmorGetter>? armors, HashSet<IArmorGetter>? clothes)
+    {
+        if (armors is null)
+            return;
+
+        if (clothes is null)
+            CreateCostumeArmor(armors);
+        else
+            EnsurePlayable(clothes);
+    }
+
+    public void EnsurePlayable(HashSet<IArmorGetter> armors)
     {
         if (armors.Any(armor => !armor.MajorFlags.HasFlag(Armor.MajorFlag.NonPlayable)))
             return;

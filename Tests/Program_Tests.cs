@@ -6,6 +6,7 @@ using Mutagen.Bethesda.Strings;
 using Noggog;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Xunit;
 
 namespace Tests;
@@ -158,8 +159,18 @@ public class Program_Tests : TestBase
             Assert.Null(foundEnchantedArmors);
     }
 
-    [Fact]
-    public void EnchantedArmorTest()
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    class LanguageData : TheoryData<Language> {
+        public LanguageData() {
+            foreach (var armorType in Enum.GetValues<Language>()) {
+                Add(armorType);
+            }
+        }
+    }
+
+    [Theory]
+    [ClassData(typeof(LanguageData))]
+    public void EnchantedArmorTest(Language language)
     {
         var armature = new ArmorAddon(masterMod, "ArmorAA");
         masterMod.ArmorAddons.Add(armature);
@@ -179,10 +190,11 @@ public class Program_Tests : TestBase
         enchantedArmor.Keywords.Add(Skyrim.Keyword.MagicDisallowEnchanting);
         enchantedArmor.Keywords.Add(Update.Keyword.Survival_ArmorCold);
 
-        // TODO surely hard-coding this won't cause any issues...
-        (enchantedArmor.Name ??= new(Language.English)).String = "An Enchanted Armor";
+        TranslatedString.DefaultLanguage = language;
 
-        (enchantedArmor.Description ??= new(Language.English)).String = "A Nifty Enchantment";
+        (enchantedArmor.Name ??= new(TranslatedString.DefaultLanguage)).String = "An Enchanted Armor";
+
+        (enchantedArmor.Description ??= new(TranslatedString.DefaultLanguage)).String = "A Nifty Enchantment";
 
         masterMod.Armors.Add(enchantedArmor);
 
@@ -225,8 +237,9 @@ public class Program_Tests : TestBase
         Assert.False(costumeKeywords.Contains(Update.Keyword.Survival_ArmorWarm.FormKey));
     }
 
-    [Fact]
-    public void EnchantedCostumeTest()
+    [Theory]
+    [ClassData(typeof(LanguageData))]
+    public void EnchantedCostumeTest(Language language)
     {
         var armature = new ArmorAddon(masterMod, "ArmorAA");
         masterMod.ArmorAddons.Add(armature);
@@ -244,10 +257,11 @@ public class Program_Tests : TestBase
         enchantedArmor.Keywords.Add(Skyrim.Keyword.ClothingHands);
         enchantedArmor.Keywords.Add(Skyrim.Keyword.MagicDisallowEnchanting);
 
-        // TODO surely hard-coding this won't cause any issues...
-        (enchantedArmor.Name ??= new(Language.English)).String = "Enchanted Gloves";
+        TranslatedString.DefaultLanguage = language;
 
-        (enchantedArmor.Description ??= new(Language.English)).String = "A Shifty Enchantment";
+        (enchantedArmor.Name ??= new(TranslatedString.DefaultLanguage)).String = "Enchanted Gloves";
+
+        (enchantedArmor.Description ??= new(TranslatedString.DefaultLanguage)).String = "A Shifty Enchantment";
 
         masterMod.Armors.Add(enchantedArmor);
 

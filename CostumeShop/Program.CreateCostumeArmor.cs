@@ -15,7 +15,6 @@ public partial class Program
     private void CreateCostumeArmor(HashSet<IArmorGetter> armors)
     {
         var armor = GetCheapestArmor(armors);
-        var foo = armor.Duplicate(armor.FormKey);
         var newCostumeArmor = PatchMod.Armors.AddNew("CostumeShop_" + armor.EditorID);
 
         CopyArmorData(newCostumeArmor, armor, ArmorToClothesCopyMask);
